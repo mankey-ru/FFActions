@@ -51,3 +51,9 @@ Read on demand, not upfront:
   before starting a feature that may already be planned there. Item numbers are
   stable IDs: never delete or renumber items; mark a done item as ~~strikethrough~~;
   append new items only at the end with the next number.
+
+## Git
+
+- Solo fork: commit and push directly to `main`, no feature branches or MRs.
+- Push right after commit unless I say otherwise.
+- `origin` = my fork (mankey-ru/FFActions); never push to upstream (Gaurox/FFActions).
