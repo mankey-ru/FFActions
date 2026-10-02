@@ -394,14 +394,10 @@ function Invoke-FFmpegWithProgress {
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $psi
 
-    $stdErrBuilder = New-Object System.Text.StringBuilder
-    $stdErrHandler = [System.Diagnostics.DataReceivedEventHandler]{
-        param($sender, $eventArgs)
-        if ($null -ne $eventArgs.Data) {
-            [void]$stdErrBuilder.AppendLine($eventArgs.Data)
-        }
-    }
-    $process.add_ErrorDataReceived($stdErrHandler)
+    # stderr is drained by a pure .NET task. A scriptblock ErrorDataReceived handler runs on a
+    # thread-pool thread without a runspace and crashes the process (GetContextFromTLS), which
+    # killed every action after FFmpeg exited and skipped fallback, cleanup and error dialogs.
+    $stdErrTask = $null
 
     $exitCode = -1
     $isCancelled = $false
@@ -416,7 +412,7 @@ function Invoke-FFmpegWithProgress {
 
     try {
         [void]$process.Start()
-        $process.BeginErrorReadLine()
+        $stdErrTask = $process.StandardError.ReadToEndAsync()
 
         # IMPORTANT : lecture stdout volontairement synchrone.
         # La version async pouvait laisser la fenêtre se fermer alors que FFmpeg travaillait encore
@@ -510,11 +506,28 @@ function Invoke-FFmpegWithProgress {
         try { $process.WaitForExit() } catch {}
 
         $exitCode = $process.ExitCode
-        $stdErr = $stdErrBuilder.ToString()
+        if ($stdErrTask) {
+            try {
+                if ($stdErrTask.Wait(5000)) { $stdErr = [string]$stdErrTask.Result }
+            } catch {}
+        }
 
         if (-not $isCancelled -and $exitCode -eq 0) {
             Wait-OutputFileFinalized -OutputFile $OutputFile -ProgressForm $ProgressForm -StatusLabel $StatusLabel
+        }
 
+        # FFmpeg can exit 0 and still leave an empty file. Report it as a failure so callers
+        # run their fallback / cleanup / error path instead of keeping a 0-byte output.
+        if (-not $isCancelled -and $exitCode -eq 0 -and $OutputFile -and (Test-Path -LiteralPath $OutputFile -PathType Leaf)) {
+            $outputLength = -1L
+            try { $outputLength = (Get-Item -LiteralPath $OutputFile -ErrorAction Stop).Length } catch {}
+            if ($outputLength -eq 0) {
+                $exitCode = 1
+                $stdErr = ($stdErr + "`r`nFFmpeg produced an empty output file.").Trim()
+            }
+        }
+
+        if (-not $isCancelled -and $exitCode -eq 0) {
             $displayedProgressValue = 1000
             if ($ProgressBar) { Set-ProgressBarValueSafe -ProgressBar $ProgressBar -Value 1000 }
             if ($PercentLabel) { $PercentLabel.Text = '100%' }
@@ -523,23 +536,8 @@ function Invoke-FFmpegWithProgress {
             [System.Threading.Thread]::Sleep(250)
         }
 
-        try { $process.CancelErrorRead() } catch {}
-
         if ($isCancelled -and $OutputFile -and (Test-Path -LiteralPath $OutputFile)) {
             try { Remove-Item -LiteralPath $OutputFile -Force -ErrorAction SilentlyContinue } catch {}
-        }
-
-        if ($exitCode -ne 0 -and -not $isCancelled) {
-            $errorLines = $stdErr -split "`r?`n" | Where-Object { $_ -notmatch '^\s*$' } | Select-Object -Last 3
-            $errorMessage = $errorLines | ForEach-Object { $_.Trim() } -join "`n"
-
-            if ($errorMessage) {
-                $outputFileLine = ''
-                if ($OutputFile -and $OutputFile -notmatch '^\s*$') {
-                    $outputFileLine = " (output: $OutputFile)"
-                }
-                Write-Host "FFmpeg failed${outputFileLine}:$errorMessage" -ForegroundColor Red
-            }
         }
 
         return [PSCustomObject]@{
@@ -552,11 +550,6 @@ function Invoke-FFmpegWithProgress {
         }
     }
     finally {
-        try {
-            if ($process -and $stdErrHandler) {
-                $process.remove_ErrorDataReceived($stdErrHandler)
-            }
-        } catch {}
         try {
             if ($process) {
                 $process.Dispose()
