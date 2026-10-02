@@ -18,6 +18,7 @@ Desktop.ini
 !/actions/*.template.ps1
 !/actions/build_ffaction.ps1
 !/actions/change_audio_pitch_launcher.ps1
+!/actions/media_info.ps1
 !/actions/_shared/ffcommon_progress.ps1
 
 # Local backups and logs
