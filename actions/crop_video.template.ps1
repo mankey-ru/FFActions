@@ -221,16 +221,6 @@ function Format-TimeForDisplay {
     return [string]::Format($culture, '{0:D2}:{1:D2}:{2:00.000}', $hours, $minutes, $secs)
 }
 
-function Test-NvencAvailable([string]$FfmpegPath) {
-    $probeResult = Invoke-HiddenProcess -FilePath $FfmpegPath -Arguments @('-hide_banner', '-encoders')
-    if ($probeResult.ExitCode -ne 0) {
-        return $false
-    }
-
-    $allText = ($probeResult.StdOut + "`r`n" + $probeResult.StdErr)
-    return ($allText -match '(^|\s)h264_nvenc(\s|$)')
-}
-
 function Get-EncodingPlan([string]$TargetExtension, [bool]$NvencAvailable) {
     switch ($TargetExtension.ToLowerInvariant()) {
         '.mp4' {

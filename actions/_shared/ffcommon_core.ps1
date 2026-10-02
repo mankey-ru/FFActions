@@ -101,6 +101,21 @@ function Invoke-HiddenProcess {
 }
 }
 
+if (-not (Get-Command -Name 'Test-NvencAvailable' -CommandType Function -ErrorAction SilentlyContinue)) {
+function Test-NvencAvailable {
+    param([Parameter(Mandatory = $true)][string]$FfmpegPath)
+
+    # Encode one synthetic frame instead of grepping `-encoders`: the bundled FFmpeg is built
+    # with NVENC, so the encoder is listed even on PCs without an NVIDIA GPU or driver.
+    $result = Invoke-HiddenProcess -FilePath $FfmpegPath -Arguments @(
+        '-hide_banner', '-loglevel', 'error',
+        '-f', 'lavfi', '-i', 'color=c=black:s=256x256:r=25',
+        '-frames:v', '1', '-c:v', 'h264_nvenc', '-f', 'null', '-'
+    )
+    return ($result.ExitCode -eq 0)
+}
+}
+
 if (-not (Get-Command -Name 'Get-UniqueOutputPath' -CommandType Function -ErrorAction SilentlyContinue)) {
 function Get-UniqueOutputPath {
     param([Parameter(Mandatory = $true)][string]$DesiredPath)

@@ -85,18 +85,6 @@ function Get-UniqueOutputPath {
     throw 'Unable to create a unique output filename.'
 }
 
-function Test-NvencAvailable {
-    param([Parameter(Mandatory = $true)][string]$FfmpegPath)
-
-    $result = Invoke-HiddenProcess -FilePath $FfmpegPath -Arguments @('-hide_banner', '-encoders')
-    if ($result.ExitCode -ne 0) {
-        return $false
-    }
-
-    $allText = ($result.StdOut + "`r`n" + $result.StdErr)
-    return ($allText -match '(^|\s)h264_nvenc(\s|$)')
-}
-
 function Get-VideoInfo {
     param(
         [Parameter(Mandatory = $true)][string]$FfprobePath,

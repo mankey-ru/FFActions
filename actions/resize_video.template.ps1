@@ -131,16 +131,6 @@ function Normalize-VideoDimensions {
     }
 }
 
-function Test-NvencAvailable([string]$FfmpegPath) {
-    $probeResult = Invoke-HiddenProcess -FilePath $FfmpegPath -Arguments @('-hide_banner', '-encoders')
-    if ($probeResult.ExitCode -ne 0) {
-        return $false
-    }
-
-    $allText = ($probeResult.StdOut + "`r`n" + $probeResult.StdErr)
-    return ($allText -match '(^|\s)h264_nvenc(\s|$)')
-}
-
 function Get-EncodingPlan([string]$TargetExtension, [bool]$NvencAvailable) {
     switch ($TargetExtension.ToLowerInvariant()) {
         '.mp4' {
