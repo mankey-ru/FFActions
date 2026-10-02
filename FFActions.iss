@@ -1,4 +1,12 @@
 #define InstallerVersionText SetupSetting("AppVersion")
+#define ContextMenuInclude AddBackslash(SourcePath) + "context_menu.generated.iss"
+
+; The context menu layout lives in tools\context_menu.psd1; its code is regenerated on every compile.
+#if Exec(GetEnv("SystemRoot") + "\System32\WindowsPowerShell\v1.0\powershell.exe", \
+    "-NoProfile -ExecutionPolicy Bypass -File " + AddQuotes(AddBackslash(SourcePath) + "tools\build_menu_iss.ps1") + \
+    " -OutputFile " + AddQuotes(ContextMenuInclude), SourcePath, 1, SW_HIDE) != 0
+  #error tools\build_menu_iss.ps1 failed to generate context_menu.generated.iss
+#endif
 
 [Setup]
 AppName=FFActions
@@ -298,10 +306,7 @@ var
 
 const
   UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\FFActions_is1';
-  VideoExtensions = '.mp4,.mkv,.avi,.mov,.webm,.m4v';
-  AudioExtensions = '.wav,.mp3,.flac,.m4a,.ogg';
-  ImageExtensions = '.png,.jpg,.jpeg,.bmp,.webp';
-  PdfImageExtensions = '.png,.jpg,.jpeg,.bmp';
+  FileAssociationsKey = 'Software\Classes\SystemFileAssociations';
 
 function GetVersionPart(var Version: string): Integer;
 var
@@ -608,285 +613,68 @@ begin
   end;
 end;
 
-function GetMenuIconPath(const MenuKey: string): string;
+procedure CleanupContextMenuKeysForHive(const Hive: Integer);
 var
-  IconFileName: string;
+  Extensions: TArrayOfString;
+  Index: Integer;
 begin
-  IconFileName := '';
-
-  if (MenuKey = 'cut_video') or (MenuKey = 'cut_audio') then
+  if not RegGetSubkeyNames(Hive, FileAssociationsKey, Extensions) then
   begin
-    IconFileName := 'cut_video_audio_icon.ico';
-  end
-  else if MenuKey = 'interpolate' then
-  begin
-    IconFileName := 'interpolate_video_icon.ico';
-  end
-  else if MenuKey = 'remove_audio' then
-  begin
-    IconFileName := 'remove.audio_video_icon.ico';
-  end
-  else if MenuKey = 'extract_frames' then
-  begin
-    IconFileName := 'extract.frames_video_icon.ico';
-  end
-  else if MenuKey = 'extract_audio' then
-  begin
-    IconFileName := 'extract.audio_video_icon.ico';
-  end
-  else if MenuKey = 'create_gif' then
-  begin
-    IconFileName := 'create.gif_video_icon.ico';
-  end
-  else if (MenuKey = 'resize') or (MenuKey = 'resize_image') then
-  begin
-    IconFileName := 'resize_image_video_icon.ico';
-  end
-  else if (MenuKey = 'change_speed') or (MenuKey = 'change_audio_speed') then
-  begin
-    IconFileName := 'change.speed_audio_icon.ico';
-  end
-  else if (MenuKey = 'crop_video') or (MenuKey = 'crop_image') then
-  begin
-    IconFileName := 'crop_video_image_icon.ico';
-  end
-  else if (MenuKey = 'rotate_video') or (MenuKey = 'flip_image') then
-  begin
-    IconFileName := 'rotate_video_image_icon.ico';
-  end
-  else if (MenuKey = 'compress_video') or
-          (MenuKey = 'compress_audio') or
-          (MenuKey = 'compress_image') then
-  begin
-    IconFileName := 'compress_video_image_audio_icon.ico';
-  end
-  else if MenuKey = 'change_audio_pitch' then
-  begin
-    IconFileName := 'change.pitch_audio_icon.ico';
-  end
-  else if MenuKey = 'reverse_audio' then
-  begin
-    IconFileName := 'reverse.audio_audio_icon.ico';
-  end
-  else if MenuKey = 'image_to_pdf' then
-  begin
-    IconFileName := 'image.to.pdf_image_icon.ico';
-  end
-  else if MenuKey = 'convert_icon' then
-  begin
-    IconFileName := 'convert.icon_image_icon.ico';
-  end
-  else if MenuKey = 'convert' then
-  begin
-    IconFileName := 'convert_audio_video_image_icon.ico';
-  end
-  else if MenuKey = 'media_info' then
-  begin
-    IconFileName := 'media.info_video_image_audio_icon.ico';
+    Exit;
   end;
 
-  if IconFileName = '' then
+  for Index := 0 to GetArrayLength(Extensions) - 1 do
   begin
-    Result := '';
-  end
-  else
-  begin
-    Result := ExpandConstant('{app}\tools\icons\icones menus\' + IconFileName);
-  end;
-end;
-
-procedure CleanupContextMenuKeysForHive(
-  const Hive: Integer; const Extensions: string);
-var
-  RemainingExtensions: string;
-  Extension: string;
-begin
-  RemainingExtensions := Extensions;
-
-  while RemainingExtensions <> '' do
-  begin
-    Extension := GetListItem(RemainingExtensions);
     RegDeleteKeyIncludingSubkeys(
-      Hive,
-      'Software\Classes\SystemFileAssociations\' + Extension + '\shell\FFActions');
+      Hive, FileAssociationsKey + '\' + Extensions[Index] + '\shell\FFActions');
   end;
 end;
 
 procedure CleanupContextMenuKeys;
 begin
-  CleanupContextMenuKeysForHive(HKCU, VideoExtensions);
-  CleanupContextMenuKeysForHive(HKCU, AudioExtensions);
-  CleanupContextMenuKeysForHive(HKCU, ImageExtensions);
-  CleanupContextMenuKeysForHive(HKLM, VideoExtensions);
-  CleanupContextMenuKeysForHive(HKLM, AudioExtensions);
-  CleanupContextMenuKeysForHive(HKLM, ImageExtensions);
+  CleanupContextMenuKeysForHive(HKCU);
+  CleanupContextMenuKeysForHive(HKLM);
 end;
 
 procedure EnsureFFActionsRootForHive(const Hive: Integer; const Ext: string);
 var
   KeyPath: string;
 begin
-  KeyPath := 'Software\Classes\SystemFileAssociations\' + Ext + '\shell\FFActions';
+  KeyPath := FileAssociationsKey + '\' + Ext + '\shell\FFActions';
   RegWriteStringValue(Hive, KeyPath, 'MUIVerb', 'FFActions');
   RegWriteStringValue(Hive, KeyPath, 'SubCommands', '');
   RegWriteStringValue(Hive, KeyPath, 'Icon', ExpandConstant('{app}\tools\icons\ffactions.ico'));
 end;
 
-procedure EnsureFFActionsRootsForHive(const Hive: Integer; const Extensions: string);
-var
-  RemainingExtensions: string;
-  Extension: string;
-begin
-  RemainingExtensions := Extensions;
-
-  while RemainingExtensions <> '' do
-  begin
-    Extension := GetListItem(RemainingExtensions);
-    EnsureFFActionsRootForHive(Hive, Extension);
-  end;
-end;
-
-procedure ApplyFFActionsRootMenus;
-var
-  SelectedComponents: string;
-begin
-  SelectedComponents := GetSelectedComponentNames();
-
-  if ComponentListHasPrefix(SelectedComponents, 'video\') then
-  begin
-    EnsureFFActionsRootsForHive(HKCU, VideoExtensions);
-  end;
-
-  if ComponentListHasPrefix(SelectedComponents, 'audio\') then
-  begin
-    EnsureFFActionsRootsForHive(HKCU, AudioExtensions);
-  end;
-
-  if ComponentListHasPrefix(SelectedComponents, 'image\') then
-  begin
-    EnsureFFActionsRootsForHive(HKCU, ImageExtensions);
-  end;
-
-  if IsAdminInstallMode then
-  begin
-    if ComponentListContains(SelectedComponents, 'video\resize_video') or
-       ComponentListContains(SelectedComponents, 'video\change_speed') then
-    begin
-      EnsureFFActionsRootsForHive(HKLM, VideoExtensions);
-    end;
-
-    if ComponentListContains(SelectedComponents, 'audio\convert') then
-    begin
-      EnsureFFActionsRootsForHive(HKLM, AudioExtensions);
-    end;
-
-    if ComponentListContains(SelectedComponents, 'image\convert') then
-    begin
-      EnsureFFActionsRootsForHive(HKLM, ImageExtensions);
-    end;
-  end;
-end;
-
-procedure ConfigurePickerMenuForHive(
-  const Hive: Integer; const Ext, MenuKey, LabelText, ExeName: string);
-var
-  KeyPath: string;
-  CommandValue: string;
-  IconPath: string;
-begin
-  EnsureFFActionsRootForHive(Hive, Ext);
-  KeyPath := 'Software\Classes\SystemFileAssociations\' + Ext + '\shell\FFActions\shell\' + MenuKey;
-  RegDeleteKeyIncludingSubkeys(Hive, KeyPath);
-  RegWriteStringValue(Hive, KeyPath, 'MUIVerb', LabelText);
-  IconPath := GetMenuIconPath(MenuKey);
-  if IconPath <> '' then
-  begin
-    RegWriteStringValue(Hive, KeyPath, 'Icon', IconPath);
-  end;
-  CommandValue := '"' + ExpandConstant('{app}\actions\' + ExeName) + '" "%1"';
-  RegWriteStringValue(Hive, KeyPath + '\command', '', CommandValue);
-end;
-
 procedure ConfigureActionMenuForHive(
-  const Hive: Integer; const Ext, MenuKey, LabelText, ExeName, PositionValue: string);
+  const Hive: Integer; const Ext, VerbName, LabelText, ExeName, IconFileName: string;
+  const CommandFlags: Cardinal);
 var
   KeyPath: string;
   CommandValue: string;
-  IconPath: string;
 begin
   EnsureFFActionsRootForHive(Hive, Ext);
-  KeyPath := 'Software\Classes\SystemFileAssociations\' + Ext + '\shell\FFActions\shell\' + MenuKey;
+  KeyPath := FileAssociationsKey + '\' + Ext + '\shell\FFActions\shell\' + VerbName;
   RegDeleteKeyIncludingSubkeys(Hive, KeyPath);
   RegWriteStringValue(Hive, KeyPath, 'MUIVerb', LabelText);
-  IconPath := GetMenuIconPath(MenuKey);
-  if IconPath <> '' then
+  if IconFileName <> '' then
   begin
-    RegWriteStringValue(Hive, KeyPath, 'Icon', IconPath);
+    RegWriteStringValue(
+      Hive, KeyPath, 'Icon', ExpandConstant('{app}\tools\icons\icones menus\' + IconFileName));
   end;
 
-  if PositionValue <> '' then
+  if CommandFlags <> 0 then
   begin
-    RegWriteStringValue(Hive, KeyPath, 'Position', PositionValue);
+    RegWriteDWordValue(Hive, KeyPath, 'CommandFlags', CommandFlags);
   end;
 
   CommandValue := '"' + ExpandConstant('{app}\actions\' + ExeName) + '" "%1"';
   RegWriteStringValue(Hive, KeyPath + '\command', '', CommandValue);
-end;
-
-procedure ConfigurePickerMenu(const Ext, MenuKey, LabelText, ExeName: string);
-begin
-  ConfigurePickerMenuForHive(HKCU, Ext, MenuKey, LabelText, ExeName);
-end;
-
-procedure ConfigurePickerMenuForAllUsers(
-  const Ext, MenuKey, LabelText, ExeName: string);
-begin
-  ConfigurePickerMenuForHive(HKCU, Ext, MenuKey, LabelText, ExeName);
-
-  if IsAdminInstallMode then
-  begin
-    ConfigurePickerMenuForHive(HKLM, Ext, MenuKey, LabelText, ExeName);
-  end;
-end;
-
-procedure ConfigureActionMenuForAllUsers(
-  const Ext, MenuKey, LabelText, ExeName, PositionValue: string);
-begin
-  ConfigureActionMenuForHive(HKCU, Ext, MenuKey, LabelText, ExeName, PositionValue);
-
-  if IsAdminInstallMode then
-  begin
-    ConfigureActionMenuForHive(HKLM, Ext, MenuKey, LabelText, ExeName, PositionValue);
-  end;
-end;
-
-procedure ApplyPickerMenuList(
-  const Extensions, MenuKey, LabelText, ExeName: string;
-  const AllUsers: Boolean);
-var
-  RemainingExtensions: string;
-  Extension: string;
-begin
-  RemainingExtensions := Extensions;
-
-  while RemainingExtensions <> '' do
-  begin
-    Extension := GetListItem(RemainingExtensions);
-
-    if AllUsers then
-    begin
-      ConfigurePickerMenuForAllUsers(Extension, MenuKey, LabelText, ExeName);
-    end
-    else
-    begin
-      ConfigurePickerMenu(Extension, MenuKey, LabelText, ExeName);
-    end;
-  end;
 end;
 
 procedure ApplyActionMenuList(
-  const Extensions, MenuKey, LabelText, ExeName, PositionValue: string;
-  const AllUsers: Boolean);
+  const Extensions, VerbName, LabelText, ExeName, IconFileName: string;
+  const CommandFlags: Cardinal; const AllUsers: Boolean);
 var
   RemainingExtensions: string;
   Extension: string;
@@ -896,253 +684,18 @@ begin
   while RemainingExtensions <> '' do
   begin
     Extension := GetListItem(RemainingExtensions);
+    ConfigureActionMenuForHive(
+      HKCU, Extension, VerbName, LabelText, ExeName, IconFileName, CommandFlags);
 
-    if AllUsers then
-    begin
-      ConfigureActionMenuForAllUsers(
-        Extension, MenuKey, LabelText, ExeName, PositionValue);
-    end
-    else
+    if AllUsers and IsAdminInstallMode then
     begin
       ConfigureActionMenuForHive(
-        HKCU, Extension, MenuKey, LabelText, ExeName, PositionValue);
+        HKLM, Extension, VerbName, LabelText, ExeName, IconFileName, CommandFlags);
     end;
   end;
 end;
 
-procedure SetMenuPositionBottom(const Ext, MenuKey: string);
-var
-  KeyPath: string;
-  CommandValue: string;
-  IconPath: string;
-begin
-  EnsureFFActionsRootForHive(HKCU, Ext);
-  KeyPath := 'Software\Classes\SystemFileAssociations\' + Ext + '\shell\FFActions\shell\' + MenuKey;
-  RegDeleteKeyIncludingSubkeys(HKCU, KeyPath);
-  RegWriteStringValue(HKCU, KeyPath, 'MUIVerb', 'media info');
-  IconPath := GetMenuIconPath(MenuKey);
-  if IconPath <> '' then
-  begin
-    RegWriteStringValue(HKCU, KeyPath, 'Icon', IconPath);
-  end;
-  RegWriteStringValue(HKCU, KeyPath, 'Position', 'Bottom');
-  CommandValue := '"' + ExpandConstant('{app}\actions\media_info.exe') + '" "%1"';
-  RegWriteStringValue(HKCU, KeyPath + '\command', '', CommandValue);
-end;
-
-procedure ApplyMenuPositionBottomList(const Extensions, MenuKey: string);
-var
-  RemainingExtensions: string;
-  Extension: string;
-begin
-  RemainingExtensions := Extensions;
-
-  while RemainingExtensions <> '' do
-  begin
-    Extension := GetListItem(RemainingExtensions);
-    SetMenuPositionBottom(Extension, MenuKey);
-  end;
-end;
-
-procedure ApplyStandardMenus;
-begin
-  if WizardIsComponentSelected('video\cut_video') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'cut_video', 'cut video', 'cut_video.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('video\interpolate') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'interpolate', 'interpolate', 'interpolate.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('video\remove_audio') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'remove_audio', 'remove audio', 'remove_audio.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('video\extract_frames') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'extract_frames', 'extract frames', 'extract_frames.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('video\create_gif') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'create_gif', 'create gif', 'create_gif.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('video\resize_video') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'resize', 'resize video', 'resize_video.exe', 'Top', True);
-  end;
-
-  if WizardIsComponentSelected('video\change_speed') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'change_speed', 'change speed', 'change_video_speed.exe', '', True);
-  end;
-
-  if WizardIsComponentSelected('video\crop_video') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'crop_video', 'crop video', 'crop_video.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('video\rotate') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'rotate_video', 'rotate / flip', 'rotate_video.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('video\compress') then
-  begin
-    ApplyActionMenuList(
-      VideoExtensions, 'compress_video', 'compress video', 'compress_video.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('audio\cut_audio') then
-  begin
-    ApplyActionMenuList(
-      AudioExtensions, 'cut_audio', 'cut audio', 'cut_audio.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('audio\change_speed') then
-  begin
-    ApplyActionMenuList(
-      AudioExtensions,
-      'change_audio_speed',
-      'change speed',
-      'change_audio_speed.exe',
-      '',
-      False);
-  end;
-
-  if WizardIsComponentSelected('audio\reverse') then
-  begin
-    ApplyActionMenuList(
-      AudioExtensions, 'reverse_audio', 'reverse audio', 'reverse_audio.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('audio\compress') then
-  begin
-    ApplyActionMenuList(
-      AudioExtensions, 'compress_audio', 'compress audio', 'compress_audio.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('audio\change_pitch') then
-  begin
-    ApplyActionMenuList(
-      AudioExtensions,
-      'change_audio_pitch',
-      'change pitch',
-      'change_audio_pitch.exe',
-      '',
-      False);
-  end;
-
-  if WizardIsComponentSelected('image\image_to_pdf') then
-  begin
-    ApplyActionMenuList(
-      PdfImageExtensions, 'image_to_pdf', 'image to pdf', 'image_to_pdf.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('image\resize_image') then
-  begin
-    ApplyActionMenuList(
-      ImageExtensions, 'resize_image', 'resize image', 'resize_image.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('image\compress') then
-  begin
-    ApplyActionMenuList(
-      ImageExtensions, 'compress_image', 'compress image', 'compress_image.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('image\flip') then
-  begin
-    ApplyActionMenuList(
-      ImageExtensions, 'flip_image', 'rotate / flip', 'flip_image.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('image\crop') then
-  begin
-    ApplyActionMenuList(
-      ImageExtensions, 'crop_image', 'crop image', 'crop_image.exe', '', False);
-  end;
-
-  if WizardIsComponentSelected('image\icon') then
-  begin
-    ApplyActionMenuList(
-      ImageExtensions, 'convert_icon', 'convert to icon', 'convert_icon.exe', '', False);
-  end;
-end;
-
-procedure ApplyPickerMenus;
-begin
-  if WizardIsComponentSelected('video\extract_audio') then
-  begin
-    ApplyPickerMenuList(
-      VideoExtensions,
-      'extract_audio',
-      'extract audio',
-      'extract_audio_picker.exe',
-      False);
-  end;
-
-  if WizardIsComponentSelected('video\convert') then
-  begin
-    ApplyPickerMenuList(
-      VideoExtensions,
-      'convert',
-      'convert',
-      'convert_video_picker.exe',
-      False);
-  end;
-
-  if WizardIsComponentSelected('audio\convert') then
-  begin
-    ApplyPickerMenuList(
-      AudioExtensions,
-      'convert',
-      'convert',
-      'convert_audio_picker.exe',
-      True);
-  end;
-
-  if WizardIsComponentSelected('image\convert') then
-  begin
-    ApplyPickerMenuList(
-      ImageExtensions,
-      'convert',
-      'convert',
-      'convert_image_picker.exe',
-      True);
-  end;
-end;
-
-procedure ApplyMediaInfoMenuPositions;
-begin
-  if WizardIsComponentSelected('video\media_info') then
-  begin
-    ApplyMenuPositionBottomList(VideoExtensions, 'media_info');
-  end;
-
-  if WizardIsComponentSelected('audio\media_info') then
-  begin
-    ApplyMenuPositionBottomList(AudioExtensions, 'media_info');
-  end;
-
-  if WizardIsComponentSelected('image\media_info') then
-  begin
-    ApplyMenuPositionBottomList(ImageExtensions, 'media_info');
-  end;
-end;
+#include ContextMenuInclude
 
 function InitializeSetup(): Boolean;
 begin
@@ -1277,10 +830,7 @@ begin
 
   if CurStep = ssPostInstall then
   begin
-    ApplyFFActionsRootMenus;
-    ApplyStandardMenus;
-    ApplyPickerMenus;
-    ApplyMediaInfoMenuPositions;
+    ApplyContextMenus;
   end;
 end;
 

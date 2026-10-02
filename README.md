@@ -422,6 +422,8 @@ Example to build the installer after that:
 Open FFActions.iss with Inno Setup and compile the installer
 ```
 
+The context menu entries (items, order, separators, icons) come from `tools\context_menu.psd1`. Compiling `FFActions.iss` runs `tools\build_menu_iss.ps1`, which turns that layout into the installer's registry code, so there is nothing to regenerate by hand.
+
 ## Dev Context Menu
 
 To test the locally built executables from Explorer without the installer, register a separate `FFActionsDev` right-click menu (current user only, no admin rights needed):
@@ -431,7 +433,7 @@ To test the locally built executables from Explorer without the installer, regis
 .\tools\dev_menu.ps1 -Uninstall  # remove
 ```
 
-The menu runs `actions\*.exe` straight from the project folder, so rebuilt executables are picked up immediately. Items, labels, icons and their order are defined in `tools\dev_menu.psd1`: edit it and run the script again. It does not touch the `FFActions` menu created by the installer.
+The menu runs `actions\*.exe` straight from the project folder, so rebuilt executables are picked up immediately. Items, labels, icons, order and separators come from `tools\context_menu.psd1`, the same layout the installer uses: edit it and run the script again to preview the menu before building a release. It does not touch the `FFActions` menu created by the installer.
 
 ## If You Never Want To Run The Installer
 

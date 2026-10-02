@@ -5,6 +5,7 @@ Desktop.ini
 
 # Build artifacts
 /FFActions_Setup.exe
+/context_menu.generated.iss
 /dist/
 /release/
 /Z-scripts4gpt/

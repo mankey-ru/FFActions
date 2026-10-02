@@ -4,10 +4,12 @@ param(
 
 # Registers an "FFActionsDev" Explorer context menu (current user only, no admin)
 # that runs the executables built in this repo's actions\ folder.
-# The layout lives in dev_menu.psd1; re-run this script after editing it or
-# after rebuilding. -Uninstall removes the menu.
+# The layout comes from context_menu.psd1 (shared with the installer); re-run
+# this script after editing it. -Uninstall removes the menu.
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'context_menu_layout.ps1')
 
 $menuName = 'FFActionsDev'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -17,18 +19,19 @@ $rootIconPath = Join-Path $repoRoot 'tools\icons\ffactions.ico'
 $associationsPath = 'Software\Classes\SystemFileAssociations'
 $hive = [Microsoft.Win32.Registry]::CurrentUser
 
-function Set-RegistryString {
+function Set-RegistryValue {
     param(
         [Parameter(Mandatory = $true)][string]$KeyPath,
         [AllowEmptyString()]
         [Parameter(Mandatory = $true)][string]$Name,
         [AllowEmptyString()]
-        [Parameter(Mandatory = $true)][string]$Value
+        [Parameter(Mandatory = $true)]$Value,
+        [Microsoft.Win32.RegistryValueKind]$Kind = [Microsoft.Win32.RegistryValueKind]::String
     )
 
     $key = $hive.CreateSubKey($KeyPath)
     try {
-        $key.SetValue($Name, $Value, [Microsoft.Win32.RegistryValueKind]::String)
+        $key.SetValue($Name, $Value, $Kind)
     }
     finally {
         $key.Dispose()
@@ -85,53 +88,44 @@ if ($Uninstall) {
     return
 }
 
-$layout = Import-PowerShellDataFile -LiteralPath (Join-Path $PSScriptRoot 'dev_menu.psd1')
 $missingFiles = New-Object System.Collections.Generic.List[string]
 $menuExtensions = @{}
 
-foreach ($family in $layout.Families) {
-    $index = 0
-    foreach ($item in $family.Items) {
-        $index++
-        $exePath = Join-Path $actionsDir $item.Exe
-        if (-not (Test-Path -LiteralPath $exePath)) {
-            $missingFiles.Add($exePath)
+foreach ($entry in (Get-ContextMenuEntries)) {
+    $exePath = Join-Path $actionsDir $entry.Exe
+    if (-not (Test-Path -LiteralPath $exePath)) {
+        $missingFiles.Add($exePath)
+    }
+
+    $iconPath = ''
+    if ($entry.Icon) {
+        $iconPath = Join-Path $menuIconsDir $entry.Icon
+        if (-not (Test-Path -LiteralPath $iconPath)) {
+            $missingFiles.Add($iconPath)
+            $iconPath = ''
+        }
+    }
+
+    $command = '"{0}" "%1"' -f $exePath
+
+    foreach ($extension in $entry.Extensions) {
+        $menuPath = "$associationsPath\$extension\shell\$menuName"
+        if (-not $menuExtensions.ContainsKey($extension)) {
+            Set-RegistryValue -KeyPath $menuPath -Name 'MUIVerb' -Value $menuName
+            Set-RegistryValue -KeyPath $menuPath -Name 'SubCommands' -Value ''
+            Set-RegistryValue -KeyPath $menuPath -Name 'Icon' -Value $rootIconPath
+            $menuExtensions[$extension] = $true
         }
 
-        $iconPath = ''
-        if ($item.Icon) {
-            $iconPath = Join-Path $menuIconsDir $item.Icon
-            if (-not (Test-Path -LiteralPath $iconPath)) {
-                $missingFiles.Add($iconPath)
-                $iconPath = ''
-            }
+        $verbPath = "$menuPath\shell\$($entry.VerbName)"
+        Set-RegistryValue -KeyPath $verbPath -Name 'MUIVerb' -Value $entry.Label
+        if ($iconPath) {
+            Set-RegistryValue -KeyPath $verbPath -Name 'Icon' -Value $iconPath
         }
-
-        $extensions = $family.Extensions
-        if ($item.Extensions) {
-            $extensions = $item.Extensions
+        if ($entry.CommandFlags) {
+            Set-RegistryValue -KeyPath $verbPath -Name 'CommandFlags' -Value $entry.CommandFlags -Kind DWord
         }
-
-        # Explorer sorts static submenu verbs by key name, so the numeric prefix sets the order.
-        $verbName = '{0:D2}_{1}' -f $index, [System.IO.Path]::GetFileNameWithoutExtension($item.Exe)
-        $command = '"{0}" "%1"' -f $exePath
-
-        foreach ($extension in $extensions) {
-            $menuPath = "$associationsPath\$extension\shell\$menuName"
-            if (-not $menuExtensions.ContainsKey($extension)) {
-                Set-RegistryString -KeyPath $menuPath -Name 'MUIVerb' -Value $menuName
-                Set-RegistryString -KeyPath $menuPath -Name 'SubCommands' -Value ''
-                Set-RegistryString -KeyPath $menuPath -Name 'Icon' -Value $rootIconPath
-                $menuExtensions[$extension] = $true
-            }
-
-            $verbPath = "$menuPath\shell\$verbName"
-            Set-RegistryString -KeyPath $verbPath -Name 'MUIVerb' -Value $item.Label
-            if ($iconPath) {
-                Set-RegistryString -KeyPath $verbPath -Name 'Icon' -Value $iconPath
-            }
-            Set-RegistryString -KeyPath "$verbPath\command" -Name '' -Value $command
-        }
+        Set-RegistryValue -KeyPath "$verbPath\command" -Name '' -Value $command
     }
 }
 
