@@ -509,9 +509,12 @@ $form.Text = 'FFActions - Cut video'
     $form.TopMost = $true
 
     $labelTitle = New-Object System.Windows.Forms.Label
-    $labelTitle.Location = New-Object System.Drawing.Point(20, 14)
-    $labelTitle.Size = New-Object System.Drawing.Size(860, 22)
-    $labelTitle.Text = 'Choose the start and end frames, then validate.'
+    $labelTitle.Location = New-Object System.Drawing.Point(20, 12)
+    $labelTitle.Size = New-Object System.Drawing.Size(860, 26)
+    $labelTitle.Font = New-Object System.Drawing.Font('Segoe UI', 12, [System.Drawing.FontStyle]::Bold)
+    $labelTitle.UseMnemonic = $false
+    $labelTitle.AutoEllipsis = $true
+    $labelTitle.Text = [System.IO.Path]::GetFileName($InputFile)
     $form.Controls.Add($labelTitle)
 
     $previewPanel = New-Object System.Windows.Forms.Panel
