@@ -365,7 +365,8 @@ function Format-PreciseTime {
 function Parse-TimeInput {
     param([Parameter(Mandatory = $true)][string]$Text)
 
-    $value = $Text.Trim()
+    # '-' is accepted as an alternative separator: 00-43 == 00:43
+    $value = $Text.Trim().Replace('-', ':')
     if ([string]::IsNullOrWhiteSpace($value)) {
         throw 'Time value is required.'
     }
@@ -395,7 +396,7 @@ function Parse-TimeInput {
         return ($mins * 60.0) + $secs
     }
 
-    throw 'Invalid time format. Use seconds or hh:mm:ss.mmm'
+    throw 'Invalid time format. Use seconds, hh:mm:ss.mmm or hh-mm-ss.mmm'
 }
 
 function New-PreviewBitmap {
