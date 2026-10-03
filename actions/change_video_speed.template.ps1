@@ -20,19 +20,6 @@ function Show-ErrorAndExit {
     exit 1
 }
 
-function Get-AppRoot {
-    $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-    $exeDir = Split-Path -Parent $exePath
-    return Split-Path -Parent $exeDir
-}
-
-function Get-ToolPath {
-    param([Parameter(Mandatory = $true)][string]$ToolName)
-
-    $appRoot = Get-AppRoot
-    return Join-Path $appRoot "tools\ffmpeg\$ToolName"
-}
-
 function Quote-ProcessArgument {
     param([string]$Value)
 

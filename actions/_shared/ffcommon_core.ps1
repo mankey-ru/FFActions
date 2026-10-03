@@ -11,11 +11,22 @@ function Show-Error {
 }
 }
 
+if (-not (Get-Command -Name 'Get-ActionHostPath' -CommandType Function -ErrorAction SilentlyContinue)) {
+function Get-ActionHostPath {
+    # The generated .ps1 when it is run directly (powershell.exe -File), otherwise
+    # the compiled exe: PS2EXE leaves PSCommandPath empty.
+    if (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+        return $PSCommandPath
+    }
+
+    return [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+}
+}
+
 if (-not (Get-Command -Name 'Get-AppRoot' -CommandType Function -ErrorAction SilentlyContinue)) {
 function Get-AppRoot {
-    $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-    $exeDir = Split-Path -Parent $exePath
-    return Split-Path -Parent $exeDir
+    $actionDir = Split-Path -Parent (Get-ActionHostPath)
+    return Split-Path -Parent $actionDir
 }
 }
 

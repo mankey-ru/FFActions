@@ -1,6 +1,8 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [string]$InputFile
+    [string]$InputFile,
+    # Exe name to act as when the generated script is run directly, e.g. convert_image_to_png.
+    [string]$ActionName
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -16,14 +18,18 @@ function Show-Error([string]$Message) {
 }
 
 function Get-TargetFormatFromExeName {
-    $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    # -ActionName stands in for the exe name when the generated script is run directly.
+    $exeName = $ActionName
+    if ([string]::IsNullOrWhiteSpace($exeName)) {
+        $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    }
 
     switch ($exeName.ToLowerInvariant()) {
         'convert_image_to_png'  { return '.png' }
         'convert_image_to_jpg'  { return '.jpg' }
         'convert_image_to_webp' { return '.webp' }
         'convert_image_to_bmp'  { return '.bmp' }
-        default { throw 'Unknown conversion target. Expected convert_image_to_png.exe, convert_image_to_jpg.exe, convert_image_to_webp.exe or convert_image_to_bmp.exe.' }
+        default { throw 'Unknown conversion target. Expected convert_image_to_png.exe, convert_image_to_jpg.exe, convert_image_to_webp.exe or convert_image_to_bmp.exe, or -ActionName when running the script.' }
     }
 }
 

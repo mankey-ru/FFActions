@@ -377,7 +377,11 @@ Example with `resize_image`:
 powershell -ExecutionPolicy Bypass -File .\actions\build_ffaction.ps1 -TemplateFile .\actions\resize_image.template.ps1 -OutputFile .\actions\resize_image.ps1
 ```
 
-This command injects the required shared helpers automatically, then produces a final script ready to run.
+`resize_image` needs no shared helpers. Other templates need theirs passed with `-SharedFile` (see `build_all.ps1` for which ones), so the simpler way is to generate every script at once without compiling anything:
+
+```powershell
+.\build_all.ps1 -ScriptsOnly
+```
 
 ## Run A Script Manually
 
@@ -391,6 +395,14 @@ powershell -ExecutionPolicy Bypass -STA -File .\actions\resize_image.ps1 "C:\pat
 
 The `-STA` mode is important for actions that open a Windows Forms interface.
 
+Generated scripts locate `tools\` relative to the script itself, so they run straight from the project folder. `convert_video`, `convert_audio`, `convert_image` and `extract_audio` are each compiled into several executables and take the target format from the executable name; when running the script, pass that name with `-ActionName`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -STA -File .\actions\convert_video.ps1 "C:\path\to\video.mkv" -ActionName convert_to_mp4
+```
+
+The format pickers (`*_picker.ps1`) still launch the compiled target executables from `actions\`.
+
 ## Rebuild All Scripts
 
 If you want to rebuild every action in the project at once, use:
@@ -399,7 +411,7 @@ If you want to rebuild every action in the project at once, use:
 .\build_all.ps1
 ```
 
-This regenerates the scripts and can also rebuild the executables if the required build chain is available on the machine.
+This regenerates the scripts and can also rebuild the executables if the required build chain is available on the machine. Add `-ScriptsOnly` to regenerate the scripts without compiling the executables.
 
 ## Build Requirements
 

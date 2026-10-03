@@ -1,6 +1,8 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [string]$InputFile
+    [string]$InputFile,
+    # Exe name to act as when the generated script is run directly, e.g. extract_audio_to_mp3.
+    [string]$ActionName
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -8,7 +10,11 @@ Add-Type -AssemblyName System.Drawing
 
 
 function Get-TargetFormatFromExeName {
-    $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    # -ActionName stands in for the exe name when the generated script is run directly.
+    $exeName = $ActionName
+    if ([string]::IsNullOrWhiteSpace($exeName)) {
+        $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    }
 
     switch ($exeName.ToLowerInvariant()) {
         'extract_audio_to_mp3'  { return '.mp3' }
@@ -16,7 +22,7 @@ function Get-TargetFormatFromExeName {
         'extract_audio_to_flac' { return '.flac' }
         'extract_audio_to_m4a'  { return '.m4a' }
         'extract_audio_to_ogg'  { return '.ogg' }
-        default { throw 'Unknown extraction target. Expected extract_audio_to_mp3.exe, extract_audio_to_wav.exe, extract_audio_to_flac.exe, extract_audio_to_m4a.exe or extract_audio_to_ogg.exe.' }
+        default { throw 'Unknown extraction target. Expected extract_audio_to_mp3.exe, extract_audio_to_wav.exe, extract_audio_to_flac.exe, extract_audio_to_m4a.exe or extract_audio_to_ogg.exe, or -ActionName when running the script.' }
     }
 }
 

@@ -1,7 +1,9 @@
 param(
     [string]$Version = '1.4.1',
     [string]$Company = 'FFActions contributors',
-    [string]$Product = 'FFActions'
+    [string]$Product = 'FFActions',
+    # Generate actions\*.ps1 only, without compiling the executables.
+    [switch]$ScriptsOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -111,6 +113,10 @@ function Invoke-ExeBuild {
         [string]$Title
     )
 
+    if ($ScriptsOnly) {
+        return
+    }
+
     $ps2exeParams = @{
         inputFile   = $InputFile
         outputFile  = $OutputFile
@@ -174,7 +180,7 @@ Build-Action `
     -OutputPs1    (Join-Path $base 'convert_video_picker.ps1') `
     -OutputExe    (Join-Path $base 'convert_video_picker.exe') `
     -Title        'FFActions - Convert Video' `
-    -SharedNames  @('picker')
+    -SharedNames  @('core', 'picker')
 
 Build-Action `
     -TemplateFile (Join-Path $base 'resize_video.template.ps1') `
@@ -262,7 +268,7 @@ Build-Action `
     -OutputPs1    (Join-Path $base 'convert_audio_picker.ps1') `
     -OutputExe    (Join-Path $base 'convert_audio_picker.exe') `
     -Title        'FFActions - Convert Audio' `
-    -SharedNames  @('picker')
+    -SharedNames  @('core', 'picker')
 
 Invoke-ExeBuild `
     -InputFile  (Join-Path $base 'convert_audio.ps1') `
@@ -299,7 +305,7 @@ Build-Action `
     -OutputPs1    (Join-Path $base 'extract_audio_picker.ps1') `
     -OutputExe    (Join-Path $base 'extract_audio_picker.exe') `
     -Title        'FFActions - Extract Audio' `
-    -SharedNames  @('picker')
+    -SharedNames  @('core', 'picker')
 
 Invoke-ExeBuild `
     -InputFile  (Join-Path $base 'extract_audio.ps1') `
@@ -343,7 +349,7 @@ Build-Action `
     -OutputPs1    (Join-Path $base 'convert_image_picker.ps1') `
     -OutputExe    (Join-Path $base 'convert_image_picker.exe') `
     -Title        'FFActions - Convert Image' `
-    -SharedNames  @('picker')
+    -SharedNames  @('core', 'picker')
 
 Invoke-ExeBuild `
     -InputFile  (Join-Path $base 'convert_image.ps1') `
@@ -446,4 +452,9 @@ Invoke-ExeBuild `
     -Title      'FFActions - Media Info'
 
 Write-Host ''
-Write-Host "Build complete. Version: $Version"
+if ($ScriptsOnly) {
+    Write-Host 'Scripts generated, executables were not rebuilt.'
+}
+else {
+    Write-Host "Build complete. Version: $Version"
+}

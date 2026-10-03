@@ -17,12 +17,6 @@ function Show-Error([string]$Message) {
     ) | Out-Null
 }
 
-function Get-AppRoot {
-    $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-    $exeDir = Split-Path -Parent $exePath
-    return Split-Path -Parent $exeDir
-}
-
 function Get-ActionPath([string]$ActionName) {
     $appRoot = Get-AppRoot
     return Join-Path $appRoot ("actions\{0}" -f $ActionName)

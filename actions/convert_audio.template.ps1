@@ -2,14 +2,20 @@ param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string]$InputFile,
     [Parameter(Position = 1)]
-    [string]$ProfileName = 'standard'
+    [string]$ProfileName = 'standard',
+    # Exe name to act as when the generated script is run directly, e.g. convert_audio_to_mp3.
+    [string]$ActionName
 )
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 function Get-TargetFormatFromExeName {
-    $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    # -ActionName stands in for the exe name when the generated script is run directly.
+    $exeName = $ActionName
+    if ([string]::IsNullOrWhiteSpace($exeName)) {
+        $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    }
 
     switch ($exeName.ToLowerInvariant()) {
         'convert_audio_to_mp3'  { return '.mp3' }
@@ -17,7 +23,7 @@ function Get-TargetFormatFromExeName {
         'convert_audio_to_flac' { return '.flac' }
         'convert_audio_to_m4a'  { return '.m4a' }
         'convert_audio_to_ogg'  { return '.ogg' }
-        default { throw 'Unknown conversion target. Expected convert_audio_to_mp3.exe, convert_audio_to_wav.exe, convert_audio_to_flac.exe, convert_audio_to_m4a.exe or convert_audio_to_ogg.exe.' }
+        default { throw 'Unknown conversion target. Expected convert_audio_to_mp3.exe, convert_audio_to_wav.exe, convert_audio_to_flac.exe, convert_audio_to_m4a.exe or convert_audio_to_ogg.exe, or -ActionName when running the script.' }
     }
 }
 

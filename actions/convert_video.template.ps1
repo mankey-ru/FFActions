@@ -2,14 +2,20 @@ param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string]$InputFile,
     [Parameter(Position = 1)]
-    [string]$ProfileName
+    [string]$ProfileName,
+    # Exe name to act as when the generated script is run directly, e.g. convert_to_mp4.
+    [string]$ActionName
 )
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
 function Get-TargetFormatFromExeName {
-    $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    # -ActionName stands in for the exe name when the generated script is run directly.
+    $exeName = $ActionName
+    if ([string]::IsNullOrWhiteSpace($exeName)) {
+        $exeName = [System.IO.Path]::GetFileNameWithoutExtension([System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName)
+    }
 
     switch ($exeName.ToLowerInvariant()) {
         'convert_to_mp4' { return '.mp4' }
@@ -18,7 +24,7 @@ function Get-TargetFormatFromExeName {
         'convert_to_mov' { return '.mov' }
         'convert_to_webm' { return '.webm' }
         'convert_to_m4v' { return '.m4v' }
-        default { throw 'Unknown conversion target. Expected convert_to_mp4.exe, convert_to_mkv.exe, convert_to_avi.exe, convert_to_mov.exe, convert_to_webm.exe or convert_to_m4v.exe.' }
+        default { throw 'Unknown conversion target. Expected convert_to_mp4.exe, convert_to_mkv.exe, convert_to_avi.exe, convert_to_mov.exe, convert_to_webm.exe or convert_to_m4v.exe, or -ActionName when running the script.' }
     }
 }
 

@@ -6,12 +6,6 @@ param(
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
-function Get-AppRoot {
-    $exePath = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
-    $exeDir = Split-Path -Parent $exePath
-    return Split-Path -Parent $exeDir
-}
-
 function Show-ErrorAndExit {
     param([string]$Message)
 
@@ -23,13 +17,6 @@ function Show-ErrorAndExit {
     ) | Out-Null
 
     exit 1
-}
-
-function Get-ToolPath {
-    param([Parameter(Mandatory = $true)][string]$ToolName)
-
-    $appRoot = Get-AppRoot
-    return Join-Path $appRoot "tools\ffmpeg\$ToolName"
 }
 
 function Invoke-HiddenProcess {

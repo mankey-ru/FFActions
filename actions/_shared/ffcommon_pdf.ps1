@@ -47,6 +47,39 @@ function Get-PdfRuntimeAssemblyNames {
 }
 }
 
+if (-not (Get-Command -Name 'Register-PdfRuntimeResolver' -CommandType Function -ErrorAction SilentlyContinue)) {
+function Register-PdfRuntimeResolver {
+    param(
+        [Parameter(Mandatory = $true)][string]$PdfDirectory
+    )
+
+    # PdfSharp asks for older versions of the bundled Microsoft.Extensions.* assemblies.
+    # image_to_pdf.exe redirects them in image_to_pdf.exe.config; powershell.exe (the
+    # generated script run directly) has no such config, so hand out the loaded copies.
+    # The event only fires for failed binds, so it never runs next to the exe config.
+    $pdfDirectoryFull = [System.IO.Path]::GetFullPath($PdfDirectory).TrimEnd('\')
+    $loadedByName = @{}
+    foreach ($assembly in [System.AppDomain]::CurrentDomain.GetAssemblies()) {
+        if ($assembly.IsDynamic -or [string]::IsNullOrEmpty($assembly.Location)) {
+            continue
+        }
+
+        if ([System.IO.Path]::GetDirectoryName($assembly.Location) -eq $pdfDirectoryFull) {
+            $loadedByName[$assembly.GetName().Name] = $assembly
+        }
+    }
+
+    $resolver = {
+        param($sender, $resolveArgs)
+
+        $requestedName = [System.Reflection.AssemblyName]::new($resolveArgs.Name).Name
+        return $loadedByName[$requestedName]
+    }.GetNewClosure()
+
+    [System.AppDomain]::CurrentDomain.add_AssemblyResolve([System.ResolveEventHandler]$resolver)
+}
+}
+
 if (-not (Get-Command -Name 'Import-PdfRuntime' -CommandType Function -ErrorAction SilentlyContinue)) {
 function Import-PdfRuntime {
     if ('PdfSharp.Pdf.PdfDocument' -as [type]) {
@@ -74,6 +107,8 @@ function Import-PdfRuntime {
         $assemblyPath = Join-Path $pdfDir $assemblyName
         Add-Type -Path $assemblyPath
     }
+
+    Register-PdfRuntimeResolver -PdfDirectory $pdfDir
 
     if (-not ('PdfSharp.Pdf.PdfDocument' -as [type])) {
         throw 'Unable to load the PDF runtime.'
