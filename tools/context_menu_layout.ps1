@@ -5,7 +5,7 @@
 
 $ContextMenuLayoutPath = [System.IO.Path]::Combine($PSScriptRoot, 'context_menu.psd1')
 
-# ECF_SEPARATORBEFORE: Explorer draws a separator above a static submenu verb.
+# CommandFlags ECF_SEPARATORBEFORE: Explorer draws a separator above a static submenu verb.
 $ContextMenuSeparatorBefore = 0x20
 
 function Read-ContextMenuLayout {
@@ -17,13 +17,16 @@ function Read-ContextMenuLayout {
 
 # Flattens the layout into one entry per menu item. VerbName gets a numeric
 # prefix because Explorer sorts static submenu verbs by registry key name.
+# StartsGroup marks the first item after a '-'. Which item actually carries the
+# separator is decided while writing, per extension (see New-ContextMenuSeparatorTracker),
+# because an item can be skipped (component not installed) or cover fewer extensions.
 function Get-ContextMenuEntries {
     $layout = Read-ContextMenuLayout
     $entries = [System.Collections.Generic.List[object]]::new()
 
     foreach ($family in $layout.Families) {
         $index = 0
-        $separatorPending = $false
+        $startsGroup = $false
 
         foreach ($item in $family.Items) {
             if ($item -is [string]) {
@@ -31,7 +34,7 @@ function Get-ContextMenuEntries {
                     throw "Unknown entry '$item' in the $($family.Name) items of $ContextMenuLayoutPath."
                 }
 
-                $separatorPending = $true
+                $startsGroup = $true
                 continue
             }
 
@@ -47,13 +50,9 @@ function Get-ContextMenuEntries {
                 $extensions = $item.Extensions
             }
 
-            $commandFlags = 0
-            if ($separatorPending) {
-                $commandFlags = $ContextMenuSeparatorBefore
-                $separatorPending = $false
-            }
-
             $entries.Add([PSCustomObject]@{
+                Family       = $family.Name
+                StartsGroup  = $startsGroup
                 Extensions   = [string[]]$extensions
                 VerbName     = ('{0:D2}_{1}' -f $index, [System.IO.Path]::GetFileNameWithoutExtension($item.Exe))
                 Label        = $item.Label
@@ -61,10 +60,50 @@ function Get-ContextMenuEntries {
                 Icon         = [string]$item.Icon
                 Component    = $item.Component
                 AllUsers     = [bool]$item.AllUsers
-                CommandFlags = $commandFlags
             })
+            $startsGroup = $false
         }
     }
 
     return ,$entries.ToArray()
+}
+
+# Per-extension separator state for one pass over the entries, mirrored by the
+# installer's [Code] (StartContextMenuGroup / ApplyActionMenuList): a group start
+# makes a separator pending for every extension that already has an item in the
+# family, and the next item written for that extension takes it. No leading,
+# trailing or doubled separators, whatever subset of items gets written.
+function New-ContextMenuSeparatorTracker {
+    return @{
+        Family  = $null
+        Written = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        Pending = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    }
+}
+
+# Call once per entry, before writing it.
+function Enter-ContextMenuEntry {
+    param($Tracker, $Entry)
+
+    if ($Entry.Family -ne $Tracker.Family) {
+        $Tracker.Family = $Entry.Family
+        $Tracker.Written.Clear()
+        $Tracker.Pending.Clear()
+    }
+
+    if ($Entry.StartsGroup) {
+        $Tracker.Pending.UnionWith($Tracker.Written)
+    }
+}
+
+# Call for each extension the entry is written to; returns its CommandFlags.
+function Get-ContextMenuItemFlags {
+    param($Tracker, [string]$Extension)
+
+    [void]$Tracker.Written.Add($Extension)
+    if ($Tracker.Pending.Remove($Extension)) {
+        return $ContextMenuSeparatorBefore
+    }
+
+    return 0
 }

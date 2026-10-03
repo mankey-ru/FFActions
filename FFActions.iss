@@ -303,10 +303,14 @@ var
   PreviousComponents: string;
   IsInstalled: Boolean;
   CloseAfterUninstall: Boolean;
+  MenuWrittenExtensions: string;
+  MenuSeparatorExtensions: string;
 
 const
   UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\FFActions_is1';
   FileAssociationsKey = 'Software\Classes\SystemFileAssociations';
+  { CommandFlags ECF_SEPARATORBEFORE: separator above a static submenu verb }
+  SeparatorBeforeFlag = $20;
 
 function GetVersionPart(var Version: string): Integer;
 var
@@ -672,18 +676,61 @@ begin
   RegWriteStringValue(Hive, KeyPath + '\command', '', CommandValue);
 end;
 
+function RemoveListItem(const ValueList, Item: string): string;
+var
+  RemainingItems: string;
+  CurrentItem: string;
+begin
+  Result := '';
+  RemainingItems := ValueList;
+
+  while RemainingItems <> '' do
+  begin
+    CurrentItem := GetListItem(RemainingItems);
+    if CurrentItem <> Item then
+    begin
+      Result := AddComponentIfMissing(Result, CurrentItem);
+    end;
+  end;
+end;
+
+{ Separators are placed while writing, per extension: StartContextMenuGroup makes one
+  pending for every extension that already has an item in the current family, and the
+  next item written for that extension takes it. So a skipped component never leaves a
+  leading, trailing or doubled separator. Mirrors New-ContextMenuSeparatorTracker in
+  tools\context_menu_layout.ps1. }
+procedure BeginContextMenuFamily;
+begin
+  MenuWrittenExtensions := '';
+  MenuSeparatorExtensions := '';
+end;
+
+procedure StartContextMenuGroup;
+begin
+  MenuSeparatorExtensions := MenuWrittenExtensions;
+end;
+
 procedure ApplyActionMenuList(
   const Extensions, VerbName, LabelText, ExeName, IconFileName: string;
-  const CommandFlags: Cardinal; const AllUsers: Boolean);
+  const AllUsers: Boolean);
 var
   RemainingExtensions: string;
   Extension: string;
+  CommandFlags: Cardinal;
 begin
   RemainingExtensions := Extensions;
 
   while RemainingExtensions <> '' do
   begin
     Extension := GetListItem(RemainingExtensions);
+    CommandFlags := 0;
+    if ComponentListContains(MenuSeparatorExtensions, Extension) then
+    begin
+      CommandFlags := SeparatorBeforeFlag;
+      MenuSeparatorExtensions := RemoveListItem(MenuSeparatorExtensions, Extension);
+    end;
+    MenuWrittenExtensions := AddComponentIfMissing(MenuWrittenExtensions, Extension);
+
     ConfigureActionMenuForHive(
       HKCU, Extension, VerbName, LabelText, ExeName, IconFileName, CommandFlags);
 

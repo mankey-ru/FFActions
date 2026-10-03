@@ -22,14 +22,23 @@ $lines.Add('')
 $lines.Add('procedure ApplyContextMenus;')
 $lines.Add('begin')
 
+$family = $null
 foreach ($entry in (Get-ContextMenuEntries)) {
+    if ($entry.Family -ne $family) {
+        $family = $entry.Family
+        $lines.Add('  BeginContextMenuFamily;')
+    }
+
+    if ($entry.StartsGroup) {
+        $lines.Add('  StartContextMenuGroup;')
+    }
+
     $arguments = @(
         (ConvertTo-PascalString ($entry.Extensions -join ','))
         (ConvertTo-PascalString $entry.VerbName)
         (ConvertTo-PascalString $entry.Label)
         (ConvertTo-PascalString $entry.Exe)
         (ConvertTo-PascalString $entry.Icon)
-        [string]$entry.CommandFlags
         $(if ($entry.AllUsers) { 'True' } else { 'False' })
     )
 

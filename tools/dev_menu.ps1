@@ -90,8 +90,10 @@ if ($Uninstall) {
 
 $missingFiles = New-Object System.Collections.Generic.List[string]
 $menuExtensions = @{}
+$separators = New-ContextMenuSeparatorTracker
 
 foreach ($entry in (Get-ContextMenuEntries)) {
+    Enter-ContextMenuEntry -Tracker $separators -Entry $entry
     $exePath = Join-Path $actionsDir $entry.Exe
     if (-not (Test-Path -LiteralPath $exePath)) {
         $missingFiles.Add($exePath)
@@ -122,8 +124,9 @@ foreach ($entry in (Get-ContextMenuEntries)) {
         if ($iconPath) {
             Set-RegistryValue -KeyPath $verbPath -Name 'Icon' -Value $iconPath
         }
-        if ($entry.CommandFlags) {
-            Set-RegistryValue -KeyPath $verbPath -Name 'CommandFlags' -Value $entry.CommandFlags -Kind DWord
+        $commandFlags = Get-ContextMenuItemFlags -Tracker $separators -Extension $extension
+        if ($commandFlags) {
+            Set-RegistryValue -KeyPath $verbPath -Name 'CommandFlags' -Value $commandFlags -Kind DWord
         }
         Set-RegistryValue -KeyPath "$verbPath\command" -Name '' -Value $command
     }
