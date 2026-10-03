@@ -24,7 +24,10 @@
 - `actions/_shared/` -> shared helpers
 - `actions/build_ffaction.ps1` -> builds individual actions
 - `build_all.ps1` -> builds all actions
-- `tools/ffmpeg/` -> `ffmpeg.exe` / `ffprobe.exe`
+- `tools/` -> runtime files, mirrored to `{app}\tools` by the installer:
+  `ffmpeg/` (`ffmpeg.exe` / `ffprobe.exe`), `icons/`, `pdf/`
+- `dev/` -> developer tooling that is never shipped: context menu layout,
+  installer menu generator, dev menu (fork addition; keep scripts out of `tools/`)
 
 ## Core Principles
 

@@ -5,6 +5,6 @@
 4. Продумать установку не в program files, а в appdata или куда там сейчас принято ставить
    - ~~`FFActions.iss` ссылается на `actions\image_to_pdf.exe.config`, а ps2exe 1.0.18 его больше не генерирует -> сборка установщика упадёт. Выяснить, что в нём было и нужен ли он (в локальной установке 1.4.1 image-компоненты не стояли, взять можно из установщика upstream release 1.4.1)~~ (be8fa99): это binding redirects для `Microsoft.Extensions.*`, без них exe не создаёт PDF; файл взят из upstream 1.4.1 и закоммичен
 5. ~~иметь возможность тестировать (запускать отдельные команды прямо из проекта)~~ (f5cc612, 5c38010)
-   - собранные exe из проекта уже запускаются через ПКМ-меню `FFActionsDev`: `tools/dev_menu.ps1`, раскладка общая с инсталлятором в `tools/context_menu.psd1`
+   - собранные exe из проекта уже запускаются через ПКМ-меню `FFActionsDev`: `dev/dev_menu.ps1`, раскладка общая с инсталлятором в `dev/context_menu.psd1`
    - ~~запуск сгенерированных `actions\*.ps1` без сборки exe (как описано в README) не найдёт ffmpeg: `Get-AppRoot` берёт путь процесса, а под `powershell.exe -File` это `System32\WindowsPowerShell`, а не проект~~ (5c38010): скрипты генерируются через `build_all.ps1 -ScriptsOnly`, семейства convert/extract запускаются с `-ActionName`
 6. рассмотреть переход на PS7 - плюсы и минусы

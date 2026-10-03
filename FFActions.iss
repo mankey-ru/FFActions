@@ -1,11 +1,11 @@
 #define InstallerVersionText SetupSetting("AppVersion")
 #define ContextMenuInclude AddBackslash(SourcePath) + "context_menu.generated.iss"
 
-; The context menu layout lives in tools\context_menu.psd1; its code is regenerated on every compile.
+; The context menu layout lives in dev\context_menu.psd1; its code is regenerated on every compile.
 #if Exec(GetEnv("SystemRoot") + "\System32\WindowsPowerShell\v1.0\powershell.exe", \
-    "-NoProfile -ExecutionPolicy Bypass -File " + AddQuotes(AddBackslash(SourcePath) + "tools\build_menu_iss.ps1") + \
+    "-NoProfile -ExecutionPolicy Bypass -File " + AddQuotes(AddBackslash(SourcePath) + "dev\build_menu_iss.ps1") + \
     " -OutputFile " + AddQuotes(ContextMenuInclude), SourcePath, 1, SW_HIDE) != 0
-  #error tools\build_menu_iss.ps1 failed to generate context_menu.generated.iss
+  #error dev\build_menu_iss.ps1 failed to generate context_menu.generated.iss
 #endif
 
 [Setup]
@@ -698,7 +698,7 @@ end;
   pending for every extension that already has an item in the current family, and the
   next item written for that extension takes it. So a skipped component never leaves a
   leading, trailing or doubled separator. Mirrors New-ContextMenuSeparatorTracker in
-  tools\context_menu_layout.ps1. }
+  dev\context_menu_layout.ps1. }
 procedure BeginContextMenuFamily;
 begin
   MenuWrittenExtensions := '';

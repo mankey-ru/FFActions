@@ -1,4 +1,4 @@
-# Loader for tools\context_menu.psd1, dot-sourced by dev_menu.ps1 and build_menu_iss.ps1.
+# Loader for dev\context_menu.psd1, dot-sourced by dev_menu.ps1 and build_menu_iss.ps1.
 # Uses only language features and .NET, no module cmdlets: when ISCC is started
 # from PowerShell 7, the Windows PowerShell it spawns inherits a PSModulePath
 # that breaks cmdlet autoloading (Import-PowerShellDataFile, New-Object, ...).

@@ -1,6 +1,6 @@
 # Explorer context menu layout, the single source for both menus:
 #   - FFActions.iss generates the installer's "FFActions" menu from it at compile time
-#   - tools\dev_menu.ps1 registers the "FFActionsDev" menu from it
+#   - dev\dev_menu.ps1 registers the "FFActionsDev" menu from it
 # Item order here is the order in the submenu. A '-' entry starts a new group: the
 # separator goes before the first item of the group that is actually written for an
 # extension, so skipped components never leave leading, trailing or doubled separators.
