@@ -13,6 +13,7 @@ Desktop.ini
 # Generated action executables
 /actions/*.exe
 /actions/*.exe.config
+!/actions/image_to_pdf.exe.config
 
 # Generated action scripts
 /actions/*.ps1
