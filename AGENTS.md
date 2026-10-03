@@ -55,9 +55,10 @@ Read on demand, not upfront:
 - Solo fork: commit and push directly to `main`, no feature branches or MRs.
 - Push right after commit unless I say otherwise.
 - `origin` = my fork (mankey-ru/FFActions); never push to upstream (Gaurox/FFActions).
-- Verify before committing code: changes in `actions/` (templates, `_shared/`) ->
-  `.\build_all.ps1`, then `.\dev\smoke_test.ps1`; changes to the menu layout or
-  `dev/` scripts -> `.\dev\dev_menu.ps1`, then `.\dev\smoke_test.ps1`. Commit only
-  on a green run; otherwise report the failing checks instead of committing.
-  The smoke test does not cover interactive actions (cut, crop, resize, ...):
-  say so when a change touches them. Docs-only changes skip this.
+- Smoke test: run it before every push and when I ask, not before each commit.
+  Use `.\dev\smoke_test.ps1 -Changed`: it picks the checks from the diff against
+  `origin/main` and fails builds older than their changed sources. Before it, run
+  `.\build_all.ps1` when `actions/` changed and `.\dev\dev_menu.ps1` when the menu
+  layout changed. Push only on a green run, otherwise report the failing checks.
+  Always state what the run did not cover (it prints "Not covered": interactive
+  actions, installer compile). Pushes without such changes need no run.

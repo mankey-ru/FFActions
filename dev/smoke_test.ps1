@@ -3,7 +3,11 @@ param(
     [ValidateSet('All', 'Exe', 'Script')]
     [string]$Mode = 'All',
     # Skip the picker chains: they open picker windows and click a format button.
-    [switch]$SkipPickers
+    [switch]$SkipPickers,
+    # Run only the checks that cover files changed since -Base (commits and uncommitted work).
+    [switch]$Changed,
+    # Base for -Changed: the diff starts at the merge base of -Base and HEAD.
+    [string]$Base = 'origin/main'
 )
 
 # Smoke test for the built actions (run build_all.ps1 first):
@@ -13,6 +17,8 @@ param(
 #   - PDF runtime: exe with image_to_pdf.exe.config only, script with the assembly resolver
 #   - FFActionsDev menu as Explorer builds it, against dev\context_menu.psd1
 # Interactive actions (cut, crop, resize, ...) are not covered.
+# -Changed picks the checks from the changed files, fails builds older than their
+# changed sources and lists what nothing covers (interactive actions, installer).
 # Work files go to test\smoke (ignored, recreated on every run).
 # Exit code: number of failed checks.
 
@@ -22,6 +28,10 @@ if ($PSVersionTable.PSEdition -ne 'Desktop' -or [System.Threading.Thread]::Curre
     $relaunch = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Mode', $Mode)
     if ($SkipPickers) {
         $relaunch += '-SkipPickers'
+    }
+
+    if ($Changed) {
+        $relaunch += @('-Changed', '-Base', $Base)
     }
 
     & $windowsPowerShell @relaunch
@@ -37,6 +47,7 @@ $workRoot = Join-Path $repoRoot 'test\smoke'
 $mediaDir = Join-Path $workRoot 'media'
 $devMenuName = 'FFActionsDev'
 $timeoutSeconds = 120
+$selection = $null  # -Changed: what to run, see Get-ChangedSelection
 
 $runModes = switch ($Mode) {
     'All' { @('exe', 'script') }
@@ -294,6 +305,29 @@ function Get-NewOutput {
     }
 }
 
+# With -Changed, a build older than its own changed sources (its templates, shared
+# helpers, build scripts) would test the old code.
+function Get-StaleNote {
+    param([string]$Path, [string[]]$Scripts)
+
+    if ($null -eq $selection) {
+        return $null
+    }
+
+    $patterns = @('^actions/_shared/', '^actions/build_ffaction\.ps1$', '^build_all\.ps1$') +
+        @($Scripts | ForEach-Object { '^actions/' + [regex]::Escape($_) + '\.template\.ps1$' })
+    $newest = $selection.Files |
+        Where-Object { $file = $_; @($patterns | Where-Object { $file -match $_ }).Count -gt 0 } |
+        ForEach-Object { Join-Path $repoRoot $_ } | Where-Object { Test-Path -LiteralPath $_ } |
+        ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTime } | Sort-Object -Descending | Select-Object -First 1
+
+    if ($newest -and (Get-Item -LiteralPath $Path).LastWriteTime -lt $newest) {
+        return "$(Split-Path -Leaf $Path) is older than its changed sources (run build_all.ps1)"
+    }
+
+    return $null
+}
+
 function Test-ActionCase {
     param($Case, [string]$RunMode)
 
@@ -301,6 +335,12 @@ function Test-ActionCase {
     $actionFile = Get-ActionFile -RunMode $RunMode -Name $name
     if (-not (Test-Path -LiteralPath $actionFile)) {
         Add-Result $Case.Action $RunMode 'FAIL' "missing $actionFile (run build_all.ps1)"
+        return
+    }
+
+    $stale = Get-StaleNote -Path $actionFile -Scripts @($Case.Script)
+    if ($stale) {
+        Add-Result $Case.Action $RunMode 'FAIL' $stale
         return
     }
 
@@ -346,6 +386,12 @@ function Test-PickerCase {
     $pickerFile = Get-ActionFile -RunMode $RunMode -Name $Case.Picker
     if (-not (Test-Path -LiteralPath $pickerFile)) {
         Add-Result $check $RunMode 'FAIL' "missing $pickerFile (run build_all.ps1)"
+        return
+    }
+
+    $stale = Get-StaleNote -Path $pickerFile -Scripts @($Case.Picker, $Case.Target)
+    if ($stale) {
+        Add-Result $check $RunMode 'FAIL' $stale
         return
     }
 
@@ -518,6 +564,134 @@ function Test-DevMenu {
     }
 }
 
+# -Changed: maps the files changed since the merge base of $Base and HEAD (commits,
+# uncommitted and untracked files) to the checks that cover them.
+function Get-ChangedSelection {
+    $mergeBase = & git -C $repoRoot merge-base $Base HEAD
+    if ($LASTEXITCODE -ne 0) {
+        throw "Cannot find the merge base of $Base and HEAD."
+    }
+
+    $files = @(& git -C $repoRoot diff --name-only $mergeBase) + @(& git -C $repoRoot ls-files --others --exclude-standard)
+    $result = @{
+        MergeBase  = $mergeBase
+        Files      = @($files | Where-Object { $_ } | Sort-Object -Unique)
+        All        = $false
+        Scripts    = [System.Collections.Generic.HashSet[string]]::new()
+        Pdf        = $false
+        Menu       = $false
+        NotCovered = [System.Collections.Generic.List[string]]::new()
+    }
+
+    $coveredScripts = @($actionCases | ForEach-Object { $_.Script }) + @($pickerCases | ForEach-Object { $_.Picker; $_.Target })
+    foreach ($file in $result.Files) {
+        switch -Regex ($file) {
+            '^(build_all\.ps1|actions/build_ffaction\.ps1|actions/_shared/ffcommon_(core|progress|media)\.ps1|dev/smoke_test\.ps1)$' {
+                $result.All = $true
+                break
+            }
+            '^actions/_shared/ffcommon_picker\.ps1$' {
+                foreach ($case in $pickerCases) {
+                    [void]$result.Scripts.Add($case.Picker)
+                }
+                break
+            }
+            '^(actions/_shared/ffcommon_pdf\.ps1|actions/image_to_pdf\.exe\.config|tools/pdf/.+)$' {
+                $result.Pdf = $true
+                break
+            }
+            '^actions/(.+)\.template\.ps1$' {
+                if ($coveredScripts -contains $Matches[1]) {
+                    [void]$result.Scripts.Add($Matches[1])
+                }
+                else {
+                    $result.NotCovered.Add("$file (interactive action)")
+                }
+                break
+            }
+            '^actions/(media_info|change_audio_pitch_launcher)\.ps1$' {
+                $result.NotCovered.Add("$file (interactive action)")
+                break
+            }
+            '^dev/(context_menu\.psd1|context_menu_layout\.ps1|dev_menu\.ps1)$' {
+                $result.Menu = $true
+                break
+            }
+            '^(FFActions\.iss|dev/build_menu_iss\.ps1)$' {
+                $result.NotCovered.Add("$file (installer compile)")
+                break
+            }
+            '(\.md|^LICENSE|^\.gitignore|^\.gitattributes|^\.editorconfig|^\.github/.+)$' {
+                break
+            }
+            default {
+                $result.NotCovered.Add($file)
+            }
+        }
+    }
+
+    return $result
+}
+
+function Test-CaseSelected {
+    param([string[]]$Scripts)
+
+    if ($null -eq $selection -or $selection.All) {
+        return $true
+    }
+
+    return @($Scripts | Where-Object { $selection.Scripts.Contains($_) }).Count -gt 0
+}
+
+function Test-GroupSelected {
+    param([string]$Group)
+
+    return ($null -eq $selection -or $selection.All -or $selection[$Group])
+}
+
+$actionCases = @(
+    @{ Action = 'remove_audio';          Script = 'remove_audio';   Input = 'clip.mp4';  Output = '*.mp4';     Extra = @() }
+    @{ Action = 'reverse_audio';         Script = 'reverse_audio';  Input = 'clip.wav';  Output = '*.wav';     Extra = @() }
+    @{ Action = 'extract_frames';        Script = 'extract_frames'; Input = 'clip.mp4';  Output = '*_frames*'; Extra = @() }
+    @{ Action = 'extract_audio_to_mp3';  Script = 'extract_audio';  Input = 'clip.mp4';  Output = '*.mp3';     Extra = @() }
+    @{ Action = 'convert_audio_to_flac'; Script = 'convert_audio';  Input = 'clip.wav';  Output = '*.flac';    Extra = @() }
+    @{ Action = 'convert_image_to_jpg';  Script = 'convert_image';  Input = 'frame.png'; Output = '*.jpg';     Extra = @() }
+    @{ Action = 'convert_to_mkv';        Script = 'convert_video';  Input = 'clip.mp4';  Output = '*.mkv';     Extra = @('universal') }
+)
+
+# Target: the script the picker starts, so a change in it also runs the chain.
+$pickerCases = @(
+    @{ Picker = 'extract_audio_picker'; Target = 'extract_audio'; Input = 'clip.mp4';  Button = 'WAV'; Output = '*.wav' }
+    @{ Picker = 'convert_video_picker'; Target = 'convert_video'; Input = 'clip.mp4';  Button = 'MOV'; Output = '*.mov' }
+    @{ Picker = 'convert_audio_picker'; Target = 'convert_audio'; Input = 'clip.wav';  Button = 'MP3'; Output = '*.mp3' }
+    @{ Picker = 'convert_image_picker'; Target = 'convert_image'; Input = 'frame.png'; Button = 'BMP'; Output = '*.bmp' }
+)
+
+if ($Changed) {
+    $selection = Get-ChangedSelection
+    $selected = if ($selection.All) {
+        'all checks'
+    }
+    else {
+        @(
+            if ($selection.Scripts.Count -gt 0) { 'actions: ' + (@($selection.Scripts | Sort-Object) -join ', ') }
+            if ($selection.Pdf) { 'pdf runtime' }
+            if ($selection.Menu) { 'dev menu' }
+        ) -join '; '
+    }
+
+    Write-Host ('Changed since {0} ({1}): {2} file(s)' -f $Base, $selection.MergeBase.Substring(0, 7), $selection.Files.Count)
+    Write-Host ('Selected: {0}' -f $(if ($selected) { $selected } else { 'nothing' }))
+    if ($selection.NotCovered.Count -gt 0) {
+        Write-Host ('Not covered: ' + ($selection.NotCovered -join ', ')) -ForegroundColor Yellow
+    }
+
+    Write-Host ''
+    if (-not $selected) {
+        exit 0
+    }
+}
+
 if (-not (Test-Path -LiteralPath $ffmpegPath)) {
     throw "ffmpeg not found: $ffmpegPath"
 }
@@ -533,43 +707,35 @@ Invoke-FFmpeg @('-f', 'lavfi', '-i', 'sine=frequency=440:duration=3', (Join-Path
 Invoke-FFmpeg @('-f', 'lavfi', '-i', 'testsrc2=size=320x240', '-frames:v', '1', (Join-Path $mediaDir 'frame.png'))
 [System.IO.File]::WriteAllBytes((Join-Path $mediaDir 'empty.webp'), [byte[]]@())
 
-$parseErrors = foreach ($script in Get-ChildItem -LiteralPath $actionsDir -Filter '*.ps1' | Where-Object { $_.Name -notlike '*.template.ps1' }) {
-    $errors = $null
-    [void][System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$errors)
-    if ($errors.Count -gt 0) {
-        '{0}: {1}' -f $script.Name, $errors[0].Message
+if ($null -eq $selection -or $selection.All -or $selection.Scripts.Count -gt 0) {
+    $parseErrors = foreach ($script in Get-ChildItem -LiteralPath $actionsDir -Filter '*.ps1' | Where-Object { $_.Name -notlike '*.template.ps1' }) {
+        $errors = $null
+        [void][System.Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$null, [ref]$errors)
+        if ($errors.Count -gt 0) {
+            '{0}: {1}' -f $script.Name, $errors[0].Message
+        }
+    }
+
+    if ($parseErrors) {
+        Add-Result 'scripts parse' 'script' 'FAIL' (@($parseErrors) -join '; ')
+    }
+    else {
+        Add-Result 'scripts parse' 'script' 'PASS'
     }
 }
-if ($parseErrors) {
-    Add-Result 'scripts parse' 'script' 'FAIL' (@($parseErrors) -join '; ')
-}
-else {
-    Add-Result 'scripts parse' 'script' 'PASS'
-}
-
-$actionCases = @(
-    @{ Action = 'remove_audio';          Script = 'remove_audio';   Input = 'clip.mp4';  Output = '*.mp4';     Extra = @() }
-    @{ Action = 'reverse_audio';         Script = 'reverse_audio';  Input = 'clip.wav';  Output = '*.wav';     Extra = @() }
-    @{ Action = 'extract_frames';        Script = 'extract_frames'; Input = 'clip.mp4';  Output = '*_frames*'; Extra = @() }
-    @{ Action = 'extract_audio_to_mp3';  Script = 'extract_audio';  Input = 'clip.mp4';  Output = '*.mp3';     Extra = @() }
-    @{ Action = 'convert_audio_to_flac'; Script = 'convert_audio';  Input = 'clip.wav';  Output = '*.flac';    Extra = @() }
-    @{ Action = 'convert_image_to_jpg';  Script = 'convert_image';  Input = 'frame.png'; Output = '*.jpg';     Extra = @() }
-    @{ Action = 'convert_to_mkv';        Script = 'convert_video';  Input = 'clip.mp4';  Output = '*.mkv';     Extra = @('universal') }
-)
-
-$pickerCases = @(
-    @{ Picker = 'extract_audio_picker'; Input = 'clip.mp4';  Button = 'WAV'; Output = '*.wav' }
-    @{ Picker = 'convert_video_picker'; Input = 'clip.mp4';  Button = 'MOV'; Output = '*.mov' }
-    @{ Picker = 'convert_audio_picker'; Input = 'clip.wav';  Button = 'MP3'; Output = '*.mp3' }
-    @{ Picker = 'convert_image_picker'; Input = 'frame.png'; Button = 'BMP'; Output = '*.bmp' }
-)
 
 foreach ($runMode in $runModes) {
     foreach ($case in $actionCases) {
-        Test-ActionCase -Case $case -RunMode $runMode
+        if (Test-CaseSelected -Scripts @($case.Script)) {
+            Test-ActionCase -Case $case -RunMode $runMode
+        }
     }
 
     foreach ($case in $pickerCases) {
+        if (-not (Test-CaseSelected -Scripts @($case.Picker, $case.Target))) {
+            continue
+        }
+
         if ($SkipPickers) {
             Add-Result "$($case.Picker) $($case.Button)" $runMode 'SKIP' '-SkipPickers'
         }
@@ -578,13 +744,20 @@ foreach ($runMode in $runModes) {
         }
     }
 
-    Test-PdfRuntime -RunMode $runMode
+    if (Test-GroupSelected -Group 'Pdf') {
+        Test-PdfRuntime -RunMode $runMode
+    }
 }
 
-Test-DevMenu
+if (Test-GroupSelected -Group 'Menu') {
+    Test-DevMenu
+}
 
 $failed = @($results | Where-Object Status -eq 'FAIL').Count
 $skipped = @($results | Where-Object Status -eq 'SKIP').Count
 Write-Host ''
 Write-Host ('{0} checks: {1} passed, {2} failed, {3} skipped. Work files: {4}' -f $results.Count, ($results.Count - $failed - $skipped), $failed, $skipped, $workRoot)
+if ($selection -and $selection.NotCovered.Count -gt 0) {
+    Write-Host ('Not covered: ' + ($selection.NotCovered -join ', ')) -ForegroundColor Yellow
+}
 exit $failed

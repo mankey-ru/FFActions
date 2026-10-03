@@ -29,6 +29,7 @@ Installer: compile `FFActions.iss` with Inno Setup 6.
 powershell -ExecutionPolicy Bypass -STA -File .\actions\cut_video.ps1 "C:\path\video.mp4"
 powershell -ExecutionPolicy Bypass -STA -File .\actions\convert_video.ps1 "C:\path\video.mkv" -ActionName convert_to_mp4
 .\dev\smoke_test.ps1            # after build_all.ps1: non-UI actions, pickers, PDF runtime, dev menu
+.\dev\smoke_test.ps1 -Changed   # only the checks covering files changed since origin/main
 ```
 
 Project rules: [PROJECT.md](PROJECT.md). Backlog: [TODO.md](TODO.md).
