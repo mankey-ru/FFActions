@@ -27,7 +27,8 @@
 - `tools/` -> runtime files, mirrored to `{app}\tools` by the installer:
   `ffmpeg/` (`ffmpeg.exe` / `ffprobe.exe`), `icons/`, `pdf/`
 - `dev/` -> developer tooling that is never shipped: context menu layout,
-  installer menu generator, dev menu (fork addition; keep scripts out of `tools/`)
+  installer menu generator, dev menu, smoke test (fork addition; keep scripts
+  out of `tools/`)
 
 ## Core Principles
 
