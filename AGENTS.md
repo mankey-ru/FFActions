@@ -41,12 +41,10 @@ Always read before touching code:
   Binding for all code changes; this file wins on conflict.
 
 Read on demand, not upfront:
-- [README.md](README.md) - user-facing docs: per-action feature descriptions
-  (video, audio, image), release notes ("Recent X.Y.Z updates"), manual script
-  usage and build steps, installation, limitations, dependencies. Read before
-  adding/changing an action, its options or output, or the build/install flow;
-  update it in the same commit when behavior it describes changes (new release
-  -> add a "Recent X.Y.Z updates" section).
+- [README.md](README.md) - short fork overview: differences from upstream, build
+  and development commands. Keep it short: no per-action docs, no release notes.
+  Update it in the same commit when one of those changes (new fork-level feature,
+  build/dev command or requirement).
 - [TODO.md](TODO.md) - backlog (in Russian). Read when I ask what to do next or
   before starting a feature that may already be planned there. Item numbers are
   stable IDs: never delete or renumber items; mark a done item as ~~strikethrough~~;
