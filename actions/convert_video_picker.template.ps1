@@ -17,32 +17,7 @@ function Show-Error([string]$Message) {
     ) | Out-Null
 }
 
-function Get-ActionPath([string]$ActionName) {
-    $appRoot = Get-AppRoot
-    return Join-Path $appRoot ("actions\{0}" -f $ActionName)
-}
-
 #__FFCOMMON_INJECT_HERE__
-
-function Quote-LauncherArgument {
-    param([string]$Value)
-
-    if ($null -eq $Value) {
-        return ''
-    }
-
-    if ($Value -eq '') {
-        return '""'
-    }
-
-    if ($Value -notmatch '[\s"]') {
-        return $Value
-    }
-
-    $escaped = $Value -replace '(\\*)"', '$1$1\\"'
-    $escaped = $escaped -replace '(\\+)$', '$1$1'
-    return '"' + $escaped + '"'
-}
 
 function Get-ConversionProfileItems {
     $items = New-Object System.Collections.Generic.List[object]
@@ -78,23 +53,6 @@ function Get-ConversionProfileItems {
     })
 
     return $items.ToArray()
-}
-
-function Start-VideoActionProcess {
-    param(
-        [Parameter(Mandatory = $true)][string]$ExePath,
-        [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string]$ProfileName
-    )
-
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $ExePath
-    $psi.Arguments = ((Quote-LauncherArgument -Value $FilePath), (Quote-LauncherArgument -Value $ProfileName) -join ' ')
-    $psi.UseShellExecute = $false
-    $psi.CreateNoWindow = $true
-    $psi.WorkingDirectory = Split-Path -Parent $ExePath
-
-    return [System.Diagnostics.Process]::Start($psi)
 }
 
 function Show-VideoConvertPicker {
@@ -239,13 +197,13 @@ try {
 
     $selectedTarget = [string]$selection.Format
     $selectedProfile = [string]$selection.Profile
-    $targetExe = Get-ActionPath ("convert_to_{0}.exe" -f $selectedTarget.ToLowerInvariant())
-    if (-not (Test-Path -LiteralPath $targetExe)) {
-        Show-Error "Conversion action not found:`r`n$targetExe"
+    $launch = Get-TargetActionLaunch -ActionName ("convert_to_{0}" -f $selectedTarget.ToLowerInvariant()) -ScriptName 'convert_video' -Arguments @($fullInputPath, $selectedProfile)
+    if (-not (Test-Path -LiteralPath $launch.TargetPath)) {
+        Show-Error "Conversion action not found:`r`n$($launch.TargetPath)"
         exit 1
     }
 
-    $process = Start-VideoActionProcess -ExePath $targetExe -FilePath $fullInputPath -ProfileName $selectedProfile
+    $process = Start-TargetAction -Launch $launch
     if ($null -eq $process) {
         Show-Error 'Unable to start video conversion.'
         exit 1

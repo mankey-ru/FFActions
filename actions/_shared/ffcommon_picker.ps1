@@ -1,15 +1,46 @@
-function Start-ActionProcess {
+# How to start a target action: actions\<ActionName>.exe from a compiled picker, or
+# the generated actions\<ScriptName>.ps1 -ActionName <ActionName> when the picker
+# itself runs as a script, so the whole chain works without compiled executables.
+function Get-TargetActionLaunch {
     param(
-        [Parameter(Mandatory = $true)][string]$ExePath,
-        [Parameter(Mandatory = $true)][string]$FilePath
+        [Parameter(Mandatory = $true)][string]$ActionName,
+        [Parameter(Mandatory = $true)][string]$ScriptName,
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string[]]$Arguments
+    )
+
+    $actionsDir = Join-Path (Get-AppRoot) 'actions'
+    $quotedArguments = @($Arguments | ForEach-Object { Quote-ProcessArgument -Value $_ })
+
+    if ([System.IO.Path]::GetExtension((Get-ActionHostPath)) -eq '.ps1') {
+        $targetPath = Join-Path $actionsDir ($ScriptName + '.ps1')
+        $hostArguments = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', (Quote-ProcessArgument -Value $targetPath))
+
+        return [PSCustomObject]@{
+            TargetPath = $targetPath
+            FileName   = [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+            Arguments  = (($hostArguments + $quotedArguments + @('-ActionName', $ActionName)) -join ' ')
+        }
+    }
+
+    $targetPath = Join-Path $actionsDir ($ActionName + '.exe')
+    return [PSCustomObject]@{
+        TargetPath = $targetPath
+        FileName   = $targetPath
+        Arguments  = ($quotedArguments -join ' ')
+    }
+}
+
+function Start-TargetAction {
+    param(
+        [Parameter(Mandatory = $true)]$Launch
     )
 
     $psi = New-Object System.Diagnostics.ProcessStartInfo
-    $psi.FileName = $ExePath
-    $psi.Arguments = '"{0}"' -f ($FilePath -replace '"', '\"')
+    $psi.FileName = $Launch.FileName
+    $psi.Arguments = $Launch.Arguments
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
-    $psi.WorkingDirectory = Split-Path -Parent $ExePath
+    $psi.WorkingDirectory = Split-Path -Parent $Launch.TargetPath
 
     return [System.Diagnostics.Process]::Start($psi)
 }

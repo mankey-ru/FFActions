@@ -17,11 +17,6 @@ function Show-Error([string]$Message) {
     ) | Out-Null
 }
 
-function Get-ActionPath([string]$ActionName) {
-    $appRoot = Get-AppRoot
-    return Join-Path $appRoot ("actions\{0}" -f $ActionName)
-}
-
 #__FFCOMMON_INJECT_HERE__
 
 
@@ -59,13 +54,13 @@ try {
         exit 0
     }
 
-    $targetExe = Get-ActionPath ("convert_image_to_{0}.exe" -f $selectedTarget.ToLowerInvariant())
-    if (-not (Test-Path -LiteralPath $targetExe)) {
-        Show-Error "Conversion action not found:`r`n$targetExe"
+    $launch = Get-TargetActionLaunch -ActionName ("convert_image_to_{0}" -f $selectedTarget.ToLowerInvariant()) -ScriptName 'convert_image' -Arguments @($fullInputPath)
+    if (-not (Test-Path -LiteralPath $launch.TargetPath)) {
+        Show-Error "Conversion action not found:`r`n$($launch.TargetPath)"
         exit 1
     }
 
-    $process = Start-ActionProcess -ExePath $targetExe -FilePath $fullInputPath
+    $process = Start-TargetAction -Launch $launch
     if ($null -eq $process) {
         Show-Error 'Unable to start image conversion.'
         exit 1

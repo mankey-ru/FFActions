@@ -17,11 +17,6 @@ function Show-Error([string]$Message) {
     ) | Out-Null
 }
 
-function Get-ActionPath([string]$ActionName) {
-    $appRoot = Get-AppRoot
-    return Join-Path $appRoot ("actions\{0}" -f $ActionName)
-}
-
 #__FFCOMMON_INJECT_HERE__
 
 
@@ -51,13 +46,13 @@ try {
         exit 0
     }
 
-    $targetExe = Get-ActionPath ("extract_audio_to_{0}.exe" -f $selectedTarget.ToLowerInvariant())
-    if (-not (Test-Path -LiteralPath $targetExe)) {
-        Show-Error "Extraction action not found:`r`n$targetExe"
+    $launch = Get-TargetActionLaunch -ActionName ("extract_audio_to_{0}" -f $selectedTarget.ToLowerInvariant()) -ScriptName 'extract_audio' -Arguments @($fullInputPath)
+    if (-not (Test-Path -LiteralPath $launch.TargetPath)) {
+        Show-Error "Extraction action not found:`r`n$($launch.TargetPath)"
         exit 1
     }
 
-    $process = Start-ActionProcess -ExePath $targetExe -FilePath $fullInputPath
+    $process = Start-TargetAction -Launch $launch
     if ($null -eq $process) {
         Show-Error 'Unable to start audio extraction.'
         exit 1

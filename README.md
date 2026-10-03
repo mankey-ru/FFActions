@@ -401,7 +401,7 @@ Generated scripts locate `tools\` relative to the script itself, so they run str
 powershell -ExecutionPolicy Bypass -STA -File .\actions\convert_video.ps1 "C:\path\to\video.mkv" -ActionName convert_to_mp4
 ```
 
-The format pickers (`*_picker.ps1`) still launch the compiled target executables from `actions\`.
+A format picker run as a script (`*_picker.ps1`) starts its target the same way, as `actions\<script>.ps1 -ActionName ...`, so the whole chain works without compiled executables.
 
 ## Rebuild All Scripts
 
