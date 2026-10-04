@@ -4,6 +4,8 @@ param(
     [string]$Mode = 'All',
     # Skip the picker chains: they open picker windows and click a format button.
     [switch]$SkipPickers,
+    # Skip the cut dialogs: they open the action window, fill in a prefix and confirm.
+    [switch]$SkipDialogs,
     # Run only the checks that cover files changed since -Base (commits and uncommitted work).
     [switch]$Changed,
     # Base for -Changed: the diff starts at the merge base of -Base and HEAD.
@@ -14,9 +16,10 @@ param(
 #   - generated scripts parse
 #   - non-interactive actions on generated media, as exes and as generated scripts
 #   - format pickers driven through UI Automation: picker -> target action -> output
+#   - cut video / cut audio dialogs: filename prefix with invalid characters -> confirm -> output
 #   - PDF runtime: exe with image_to_pdf.exe.config only, script with the assembly resolver
 #   - FFActionsDev menu as Explorer builds it, against dev\context_menu.psd1
-# Interactive actions (cut, crop, resize, ...) are not covered.
+# Other interactive actions (crop, resize, ...) are not covered.
 # -Changed picks the checks from the changed files, fails builds older than their
 # changed sources and lists what nothing covers (interactive actions, installer).
 # Work files go to test\smoke (ignored, recreated on every run).
@@ -28,6 +31,10 @@ if ($PSVersionTable.PSEdition -ne 'Desktop' -or [System.Threading.Thread]::Curre
     $relaunch = @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Mode', $Mode)
     if ($SkipPickers) {
         $relaunch += '-SkipPickers'
+    }
+
+    if ($SkipDialogs) {
+        $relaunch += '-SkipDialogs'
     }
 
     if ($Changed) {
@@ -83,6 +90,8 @@ namespace FFActionsSmoke {
 
     public static class Native {
         [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, string lParam);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, StringBuilder lParam);
         [DllImport("user32.dll")] internal static extern IntPtr CreatePopupMenu();
         [DllImport("user32.dll")] internal static extern bool DestroyMenu(IntPtr hMenu);
         [DllImport("user32.dll")] internal static extern int GetMenuItemCount(IntPtr hMenu);
@@ -361,7 +370,7 @@ function Test-ActionCase {
     }
 }
 
-function Wait-PickerWindow {
+function Wait-ActionWindow {
     param([int]$ProcessId)
 
     $condition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $ProcessId)
@@ -398,7 +407,7 @@ function Test-PickerCase {
     $folder = New-CaseFolder -Name "$RunMode-$($Case.Picker)" -InputName $Case.Input
     $process = Start-Action -RunMode $RunMode -ActionName $Case.Picker -ScriptName $Case.Picker -Arguments @(Join-Path $folder $Case.Input)
 
-    $window = Wait-PickerWindow -ProcessId $process.Id
+    $window = Wait-ActionWindow -ProcessId $process.Id
     $nameCondition = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, $Case.Button)
     $button = if ($window) { $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $nameCondition) } else { $null }
     if ($null -eq $button) {
@@ -425,6 +434,74 @@ function Test-PickerCase {
     }
     else {
         Add-Result $check $RunMode 'PASS' ($output -join ', ')
+    }
+}
+
+# Types the prefix into the topmost text field of the dialog (the filename prefix) with
+# WM_SETTEXT, which raises TextChanged like typing does, then clicks the confirm button.
+# The field must show the invalid characters replaced and the output must carry the prefix.
+function Test-DialogCase {
+    param($Case, [string]$RunMode)
+
+    $check = "$($Case.Script) dialog"
+    $actionFile = Get-ActionFile -RunMode $RunMode -Name $Case.Script
+    if (-not (Test-Path -LiteralPath $actionFile)) {
+        Add-Result $check $RunMode 'FAIL' "missing $actionFile (run build_all.ps1)"
+        return
+    }
+
+    $stale = Get-StaleNote -Path $actionFile -Scripts @($Case.Script)
+    if ($stale) {
+        Add-Result $check $RunMode 'FAIL' $stale
+        return
+    }
+
+    $folder = New-CaseFolder -Name "$RunMode-$($Case.Script)" -InputName $Case.Input
+    $process = Start-Action -RunMode $RunMode -ActionName $Case.Script -ScriptName $Case.Script -Arguments @(Join-Path $folder $Case.Input)
+
+    $window = Wait-ActionWindow -ProcessId $process.Id
+    $field = $null
+    $button = $null
+    if ($window) {
+        # WinForms controls show up in UI Automation as Pane; the window class tells a TextBox
+        $elements = @($window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition))
+        $field = $elements | Where-Object { $_.Current.ClassName -like '*.EDIT.*' } |
+            Sort-Object { $_.Current.BoundingRectangle.Y }, { $_.Current.BoundingRectangle.X } | Select-Object -First 1
+        $button = $elements | Where-Object { $_.Current.ClassName -like '*.BUTTON.*' -and $_.Current.Name -eq $Case.Button } | Select-Object -First 1
+    }
+
+    if ($null -eq $field -or $null -eq $button) {
+        $alive = @(Get-ProcessTreeIds -RootId $process.Id)
+        $text = Get-WindowText -ProcessIds $alive
+        foreach ($id in $alive) {
+            Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+        }
+
+        Add-Result $check $RunMode 'FAIL' "no prefix field or '$($Case.Button)' button, windows: $text"
+        return
+    }
+
+    $fieldHandle = [IntPtr]$field.Current.NativeWindowHandle
+    [void][FFActionsSmoke.Native]::SendMessage($fieldHandle, 0x000C, [IntPtr]::Zero, $dialogPrefixInput)  # WM_SETTEXT
+    $fieldText = New-Object System.Text.StringBuilder 256
+    [void][FFActionsSmoke.Native]::SendMessage($fieldHandle, 0x000D, [IntPtr]$fieldText.Capacity, $fieldText)  # WM_GETTEXT
+
+    [void][FFActionsSmoke.Native]::PostMessage([IntPtr]$button.Current.NativeWindowHandle, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)  # BM_CLICK
+    $timeout = Wait-ProcessTree -RootId $process.Id
+    $output = @(Get-NewOutput -Folder $folder -InputName $Case.Input -Pattern '*')
+    $expected = @(Get-NewOutput -Folder $folder -InputName $Case.Input -Pattern $Case.Output)
+
+    if ($timeout) {
+        Add-Result $check $RunMode 'FAIL' $timeout
+    }
+    elseif ($fieldText.ToString() -cne $dialogPrefixField) {
+        Add-Result $check $RunMode 'FAIL' ("prefix field shows '{0}', expected '{1}'" -f $fieldText, $dialogPrefixField)
+    }
+    elseif ($process.ExitCode -ne 0 -or $expected.Count -eq 0) {
+        Add-Result $check $RunMode 'FAIL' ("exit code {0}, expected {1}, output: {2}" -f $process.ExitCode, $Case.Output, ($output -join ', '))
+    }
+    else {
+        Add-Result $check $RunMode 'PASS' ($expected -join ', ')
     }
 }
 
@@ -583,7 +660,8 @@ function Get-ChangedSelection {
         NotCovered = [System.Collections.Generic.List[string]]::new()
     }
 
-    $coveredScripts = @($actionCases | ForEach-Object { $_.Script }) + @($pickerCases | ForEach-Object { $_.Picker; $_.Target })
+    $coveredScripts = @($actionCases | ForEach-Object { $_.Script }) + @($pickerCases | ForEach-Object { $_.Picker; $_.Target }) +
+        @($dialogCases | ForEach-Object { $_.Script })
     foreach ($file in $result.Files) {
         switch -Regex ($file) {
             '^(build_all\.ps1|actions/build_ffaction\.ps1|actions/_shared/ffcommon_(core|progress|media)\.ps1|dev/smoke_test\.ps1)$' {
@@ -667,6 +745,14 @@ $pickerCases = @(
     @{ Picker = 'convert_image_picker'; Target = 'convert_image'; Input = 'frame.png'; Button = 'BMP'; Output = '*.bmp' }
 )
 
+# Every character invalid in Windows file names, padded with spaces the output name trims.
+$dialogPrefixInput = ' a<b>c:d"e/f\g|h*i?j '
+$dialogPrefixField = ' a-b-c-d-e-f-g-h-i-j '
+$dialogCases = @(
+    @{ Script = 'cut_video'; Input = 'clip.mp4'; Button = 'OK';  Output = 'a-b-c-d-e-f-g-h-i-j__clip__CUT__00-00__00-03.mp4' }
+    @{ Script = 'cut_audio'; Input = 'clip.wav'; Button = 'Cut'; Output = 'a-b-c-d-e-f-g-h-i-j__clip__CUT__00-00__00-03.wav' }
+)
+
 if ($Changed) {
     $selection = Get-ChangedSelection
     $selected = if ($selection.All) {
@@ -741,6 +827,19 @@ foreach ($runMode in $runModes) {
         }
         else {
             Test-PickerCase -Case $case -RunMode $runMode
+        }
+    }
+
+    foreach ($case in $dialogCases) {
+        if (-not (Test-CaseSelected -Scripts @($case.Script))) {
+            continue
+        }
+
+        if ($SkipDialogs) {
+            Add-Result "$($case.Script) dialog" $runMode 'SKIP' '-SkipDialogs'
+        }
+        else {
+            Test-DialogCase -Case $case -RunMode $runMode
         }
     }
 
