@@ -1153,7 +1153,14 @@ try {
 
         $inputDir = Split-Path -Parent $InputFile
         $baseName = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
-        $desiredOutput = Join-Path $inputDir ($baseName + '_cut' + $extension)
+        # After "Remove selection" the times are on the edited timeline, not the source one
+        $nameSuffix = '__CUT'
+        if ($selection.RemoveCount -eq 0) {
+            $nameStartSeconds = [int][Math]::Floor($selection.StartSeconds + 1e-6)
+            $nameEndSeconds = [int][Math]::Floor($selection.EndSeconds + 1e-6)
+            $nameSuffix += '__' + (Get-TimeRangeNamePart -StartSeconds $nameStartSeconds -EndSeconds $nameEndSeconds)
+        }
+        $desiredOutput = Join-Path $inputDir ($baseName + $nameSuffix + $extension)
         $outputFile = Get-UniqueOutputPath -DesiredPath $desiredOutput
 
         $ffmpegArgs = Get-FinalAudioArguments -InputFile $selection.WorkingFile -OutputFile $outputFile -StartSeconds $selection.StartSeconds -DurationSeconds $selection.Duration -Extension $extension

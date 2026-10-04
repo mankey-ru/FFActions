@@ -150,6 +150,32 @@ function Get-UniqueOutputPath {
 }
 }
 
+if (-not (Get-Command -Name 'Get-TimeRangeNamePart' -CommandType Function -ErrorAction SilentlyContinue)) {
+function Get-TimeRangeNamePart {
+    param(
+        [Parameter(Mandatory = $true)][int]$StartSeconds,
+        [Parameter(Mandatory = $true)][int]$EndSeconds
+    )
+
+    # 17-59__19-53; both bounds get hours once the range reaches 1 hour: 00-59-30__01-00-30
+    $withHours = $EndSeconds -ge 3600
+    $parts = foreach ($seconds in @($StartSeconds, $EndSeconds)) {
+        $hours = [int][Math]::Floor($seconds / 3600)
+        $minutes = [int][Math]::Floor(($seconds % 3600) / 60)
+        $secs = $seconds % 60
+
+        if ($withHours) {
+            '{0:D2}-{1:D2}-{2:D2}' -f $hours, $minutes, $secs
+        }
+        else {
+            '{0:D2}-{1:D2}' -f $minutes, $secs
+        }
+    }
+
+    return ($parts -join '__')
+}
+}
+
 if (-not (Get-Command -Name 'Remove-PartialOutput' -CommandType Function -ErrorAction SilentlyContinue)) {
 function Remove-PartialOutput {
     param([string]$Path)
