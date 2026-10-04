@@ -1177,7 +1177,7 @@ try {
         $inputDir = Split-Path -Parent $InputFile
         $baseName = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
         # After "Remove selection" the times are on the edited timeline, not the source one
-        $nameSuffix = '__CUT'
+        $nameSuffix = ' - CUT'
         if ($selection.RemoveCount -eq 0) {
             $nameStartSeconds = [int][Math]::Floor($selection.StartSeconds + 1e-6)
             $nameEndSeconds = [int][Math]::Floor($selection.EndSeconds + 1e-6)
@@ -1185,7 +1185,7 @@ try {
         }
         $outputBase = $baseName + $nameSuffix
         if ($selection.Prefix) {
-            $outputBase = $selection.Prefix + '__' + $outputBase
+            $outputBase = $selection.Prefix + ' - ' + $outputBase
         }
         $desiredOutput = Join-Path $inputDir ($outputBase + $extension)
         $outputFile = Get-UniqueOutputPath -DesiredPath $desiredOutput

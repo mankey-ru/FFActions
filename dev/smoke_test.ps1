@@ -749,8 +749,8 @@ $pickerCases = @(
 $dialogPrefixInput = ' a<b>c:d"e/f\g|h*i?j '
 $dialogPrefixField = ' a-b-c-d-e-f-g-h-i-j '
 $dialogCases = @(
-    @{ Script = 'cut_video'; Input = 'clip.mp4'; Button = 'OK';  Output = 'a-b-c-d-e-f-g-h-i-j__clip__CUT__00-00__00-03.mp4' }
-    @{ Script = 'cut_audio'; Input = 'clip.wav'; Button = 'Cut'; Output = 'a-b-c-d-e-f-g-h-i-j__clip__CUT__00-00__00-03.wav' }
+    @{ Script = 'cut_video'; Input = 'clip.mp4'; Button = 'OK';  Output = 'a-b-c-d-e-f-g-h-i-j - clip - CUT__00-00__00-03.mp4' }
+    @{ Script = 'cut_audio'; Input = 'clip.wav'; Button = 'Cut'; Output = 'a-b-c-d-e-f-g-h-i-j - clip - CUT__00-00__00-03.wav' }
 )
 
 if ($Changed) {

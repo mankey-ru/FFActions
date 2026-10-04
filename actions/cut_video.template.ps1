@@ -1075,9 +1075,9 @@ $inputBase = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
 $nameStartSeconds = [int][Math]::Floor($startFrame / $fps - 1e-6)
 $nameEndSeconds = [int][Math]::Floor($endTimeSeconds + 1e-6)
 $nameRange = Get-TimeRangeNamePart -StartSeconds $nameStartSeconds -EndSeconds $nameEndSeconds
-$outputBase = "{0}__CUT__{1}" -f $inputBase, $nameRange
+$outputBase = "{0} - CUT__{1}" -f $inputBase, $nameRange
 if ($selection.Prefix) {
-    $outputBase = $selection.Prefix + '__' + $outputBase
+    $outputBase = $selection.Prefix + ' - ' + $outputBase
 }
 $desiredOutput = Join-Path $inputDir ($outputBase + $inputExt)
 $outputFile = Get-UniqueOutputPath -DesiredPath $desiredOutput
