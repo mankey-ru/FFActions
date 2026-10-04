@@ -399,6 +399,22 @@ function Parse-TimeInput {
     throw 'Invalid time format. Use seconds, hh:mm:ss.mmm or hh-mm-ss.mmm'
 }
 
+function Format-OutputNameTime {
+    param(
+        [Parameter(Mandatory = $true)][int]$Seconds,
+        [Parameter(Mandatory = $true)][bool]$WithHours
+    )
+
+    $hours = [int][Math]::Floor($Seconds / 3600)
+    $minutes = [int][Math]::Floor(($Seconds % 3600) / 60)
+    $secs = $Seconds % 60
+
+    if ($WithHours) {
+        return ('{0:D2}-{1:D2}-{2:D2}' -f $hours, $minutes, $secs)
+    }
+    return ('{0:D2}-{1:D2}' -f $minutes, $secs)
+}
+
 function New-PreviewBitmap {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -1145,7 +1161,15 @@ $endTimeSeconds = $endFrame / $fps
 
 $inputDir = Split-Path -Parent $InputFile
 $inputBase = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
-$desiredOutput = Join-Path $inputDir ("{0}__frame_{1}_to_{2}{3}" -f $inputBase, $startFrame, $endFrame, $inputExt)
+# Whole seconds as typed in the time fields. At non-integer fps the start frame
+# usually begins just before the typed second (17:59 -> 17:58.979 at 29.97 fps),
+# so take the second in which it ends; the epsilon absorbs float noise.
+$nameStartSeconds = [int][Math]::Floor($startFrame / $fps - 1e-6)
+$nameEndSeconds = [int][Math]::Floor($endTimeSeconds + 1e-6)
+$nameWithHours = $nameEndSeconds -ge 3600
+$nameStart = Format-OutputNameTime -Seconds $nameStartSeconds -WithHours $nameWithHours
+$nameEnd = Format-OutputNameTime -Seconds $nameEndSeconds -WithHours $nameWithHours
+$desiredOutput = Join-Path $inputDir ("{0}__CUT__{1}__{2}{3}" -f $inputBase, $nameStart, $nameEnd, $inputExt)
 $outputFile = Get-UniqueOutputPath -DesiredPath $desiredOutput
 
 $videoFilter = "select='between(n,$startFrameZeroBased,$endFrameZeroBased)',setpts=PTS-STARTPTS"
