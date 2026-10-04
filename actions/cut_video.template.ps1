@@ -399,6 +399,21 @@ function Parse-TimeInput {
     throw 'Invalid time format. Use seconds, hh:mm:ss.mmm or hh-mm-ss.mmm'
 }
 
+function ConvertTo-SafeFileNamePart {
+    param([string]$Text)
+
+    # Windows set ("<>|:*?\/ and control chars) also covers macOS (:) and Linux (/)
+    $invalid = [System.IO.Path]::GetInvalidFileNameChars()
+    $chars = $Text.ToCharArray()
+    for ($i = 0; $i -lt $chars.Length; $i++) {
+        if ($invalid -contains $chars[$i]) {
+            $chars[$i] = '-'
+        }
+    }
+
+    return (-join $chars)
+}
+
 function New-PreviewBitmap {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -531,61 +546,27 @@ $form.Text = 'FFActions - Cut video'
     $previewBox.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::CenterImage
     $previewPanel.Controls.Add($previewBox)
 
-    $columnLabelWidth = 78
-    $frameTextWidth = 96
+    $columnLabelWidth = 84
+    $timeTextWidth = 96
     $frameButtonWidth = 24
     $frameButtonGap = 4
-    $frameFieldWidth = $frameTextWidth + $frameButtonGap + $frameButtonWidth + $frameButtonGap + $frameButtonWidth
+    $timeFieldWidth = $timeTextWidth + $frameButtonGap + $frameButtonWidth + $frameButtonGap + $frameButtonWidth
     $firstLabelX = 20
     $firstInputX = 104
     $secondLabelX = 278
     $secondInputX = 362
 
-    $labelStart = New-Object System.Windows.Forms.Label
-    $labelStart.Location = New-Object System.Drawing.Point($firstLabelX, 416)
-    $labelStart.Size = New-Object System.Drawing.Size($columnLabelWidth, 20)
-    $labelStart.Text = 'Start frame'
-    $form.Controls.Add($labelStart)
+    $labelPrefix = New-Object System.Windows.Forms.Label
+    $labelPrefix.Location = New-Object System.Drawing.Point($firstLabelX, 416)
+    $labelPrefix.Size = New-Object System.Drawing.Size($columnLabelWidth, 20)
+    $labelPrefix.Text = 'Filename prefix'
+    $form.Controls.Add($labelPrefix)
 
-    $textStart = New-Object System.Windows.Forms.TextBox
-    $textStart.Location = New-Object System.Drawing.Point($firstInputX, 413)
-    $textStart.Size = New-Object System.Drawing.Size($frameTextWidth, 24)
-    $form.Controls.Add($textStart)
-
-    $buttonStartPrev = New-Object System.Windows.Forms.Button
-    $buttonStartPrev.Text = '<'
-    $buttonStartPrev.Location = New-Object System.Drawing.Point(($firstInputX + $frameTextWidth + $frameButtonGap), 412)
-    $buttonStartPrev.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
-    $form.Controls.Add($buttonStartPrev)
-
-    $buttonStartNext = New-Object System.Windows.Forms.Button
-    $buttonStartNext.Text = '>'
-    $buttonStartNext.Location = New-Object System.Drawing.Point(($firstInputX + $frameTextWidth + $frameButtonGap + $frameButtonWidth + $frameButtonGap), 412)
-    $buttonStartNext.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
-    $form.Controls.Add($buttonStartNext)
-
-    $labelEnd = New-Object System.Windows.Forms.Label
-    $labelEnd.Location = New-Object System.Drawing.Point($secondLabelX, 416)
-    $labelEnd.Size = New-Object System.Drawing.Size($columnLabelWidth, 20)
-    $labelEnd.Text = 'End frame'
-    $form.Controls.Add($labelEnd)
-
-    $textEnd = New-Object System.Windows.Forms.TextBox
-    $textEnd.Location = New-Object System.Drawing.Point($secondInputX, 413)
-    $textEnd.Size = New-Object System.Drawing.Size($frameTextWidth, 24)
-    $form.Controls.Add($textEnd)
-
-    $buttonEndPrev = New-Object System.Windows.Forms.Button
-    $buttonEndPrev.Text = '<'
-    $buttonEndPrev.Location = New-Object System.Drawing.Point(($secondInputX + $frameTextWidth + $frameButtonGap), 412)
-    $buttonEndPrev.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
-    $form.Controls.Add($buttonEndPrev)
-
-    $buttonEndNext = New-Object System.Windows.Forms.Button
-    $buttonEndNext.Text = '>'
-    $buttonEndNext.Location = New-Object System.Drawing.Point(($secondInputX + $frameTextWidth + $frameButtonGap + $frameButtonWidth + $frameButtonGap), 412)
-    $buttonEndNext.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
-    $form.Controls.Add($buttonEndNext)
+    $textPrefix = New-Object System.Windows.Forms.TextBox
+    $textPrefix.Location = New-Object System.Drawing.Point($firstInputX, 413)
+    $textPrefix.Size = New-Object System.Drawing.Size(($secondInputX + $timeFieldWidth - $firstInputX), 24)
+    $textPrefix.MaxLength = 100
+    $form.Controls.Add($textPrefix)
 
     $labelPreviewState = New-Object System.Windows.Forms.Label
     $labelPreviewState.Location = New-Object System.Drawing.Point(532, 416)
@@ -601,8 +582,20 @@ $form.Text = 'FFActions - Cut video'
 
     $textStartTime = New-Object System.Windows.Forms.TextBox
     $textStartTime.Location = New-Object System.Drawing.Point($firstInputX, 445)
-    $textStartTime.Size = New-Object System.Drawing.Size($frameFieldWidth, 24)
+    $textStartTime.Size = New-Object System.Drawing.Size($timeTextWidth, 24)
     $form.Controls.Add($textStartTime)
+
+    $buttonStartPrev = New-Object System.Windows.Forms.Button
+    $buttonStartPrev.Text = '<'
+    $buttonStartPrev.Location = New-Object System.Drawing.Point(($firstInputX + $timeTextWidth + $frameButtonGap), 444)
+    $buttonStartPrev.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
+    $form.Controls.Add($buttonStartPrev)
+
+    $buttonStartNext = New-Object System.Windows.Forms.Button
+    $buttonStartNext.Text = '>'
+    $buttonStartNext.Location = New-Object System.Drawing.Point(($firstInputX + $timeTextWidth + $frameButtonGap + $frameButtonWidth + $frameButtonGap), 444)
+    $buttonStartNext.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
+    $form.Controls.Add($buttonStartNext)
 
     $labelEndTime = New-Object System.Windows.Forms.Label
     $labelEndTime.Location = New-Object System.Drawing.Point($secondLabelX, 448)
@@ -612,8 +605,20 @@ $form.Text = 'FFActions - Cut video'
 
     $textEndTime = New-Object System.Windows.Forms.TextBox
     $textEndTime.Location = New-Object System.Drawing.Point($secondInputX, 445)
-    $textEndTime.Size = New-Object System.Drawing.Size($frameFieldWidth, 24)
+    $textEndTime.Size = New-Object System.Drawing.Size($timeTextWidth, 24)
     $form.Controls.Add($textEndTime)
+
+    $buttonEndPrev = New-Object System.Windows.Forms.Button
+    $buttonEndPrev.Text = '<'
+    $buttonEndPrev.Location = New-Object System.Drawing.Point(($secondInputX + $timeTextWidth + $frameButtonGap), 444)
+    $buttonEndPrev.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
+    $form.Controls.Add($buttonEndPrev)
+
+    $buttonEndNext = New-Object System.Windows.Forms.Button
+    $buttonEndNext.Text = '>'
+    $buttonEndNext.Location = New-Object System.Drawing.Point(($secondInputX + $timeTextWidth + $frameButtonGap + $frameButtonWidth + $frameButtonGap), 444)
+    $buttonEndNext.Size = New-Object System.Drawing.Size($frameButtonWidth, 26)
+    $form.Controls.Add($buttonEndNext)
 
     $selectionPanel = New-Object System.Windows.Forms.Panel
     $selectionPanel.Location = New-Object System.Drawing.Point(20, 480)
@@ -631,7 +636,7 @@ $form.Text = 'FFActions - Cut video'
     $labelHint = New-Object System.Windows.Forms.Label
     $labelHint.Location = New-Object System.Drawing.Point(20, 582)
     $labelHint.Size = New-Object System.Drawing.Size(860, 18)
-    $labelHint.Text = 'Drag the left or right handle, or edit the frame and time fields directly.'
+    $labelHint.Text = 'Drag the left or right handle, or edit the time fields directly.'
     $form.Controls.Add($labelHint)
 
     $buttonOk = New-Object System.Windows.Forms.Button
@@ -712,8 +717,6 @@ $form.Text = 'FFActions - Cut video'
         param([bool]$RefreshPreview = $true)
 
         $uiState.UpdatingText = $true
-        $textStart.Text = [string]$selection.StartFrame
-        $textEnd.Text = [string]$selection.EndFrame
         $textStartTime.Text = Format-PreciseTime -Seconds (($selection.StartFrame - 1) / $Fps)
         $textEndTime.Text = Format-PreciseTime -Seconds ($selection.EndFrame / $Fps)
         $uiState.UpdatingText = $false
@@ -728,31 +731,6 @@ $form.Text = 'FFActions - Cut video'
             $frameToPreview = if ($uiState.ActiveBoundary -eq 'end') { $selection.EndFrame } else { $selection.StartFrame }
             Schedule-PreviewUpdate -FrameNumber $frameToPreview
         }
-    }
-
-    function Apply-BoundaryFromText {
-        param([Parameter(Mandatory = $true)][string]$Target)
-
-        $rawValue = if ($Target -eq 'start') { $textStart.Text } else { $textEnd.Text }
-        $frameValue = 0
-        if (-not [int]::TryParse($rawValue.Trim(), [ref]$frameValue)) {
-            throw ('{0} frame must be an integer.' -f (($Target.Substring(0,1).ToUpper()) + $Target.Substring(1)))
-        }
-
-        if ($frameValue -lt 1) { $frameValue = 1 }
-        if ($frameValue -gt $TotalFrames) { $frameValue = $TotalFrames }
-
-        if ($Target -eq 'start') {
-            if ($frameValue -gt $selection.EndFrame) { $frameValue = $selection.EndFrame }
-            $selection.StartFrame = $frameValue
-        }
-        else {
-            if ($frameValue -lt $selection.StartFrame) { $frameValue = $selection.StartFrame }
-            $selection.EndFrame = $frameValue
-        }
-
-        $uiState.ActiveBoundary = $Target
-        Refresh-SelectionUi -RefreshPreview $true
     }
 
     function Convert-TimeToFrameBoundary {
@@ -959,53 +937,13 @@ $form.Text = 'FFActions - Cut video'
         Step-FrameBoundary -Target 'end' -Delta 1
     })
 
-    $textStart.Add_Leave({
-        if ($uiState.UpdatingText) { return }
-        try {
-            Apply-BoundaryFromText -Target 'start'
-        }
-        catch {
-            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'FFActions - Error', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-            Refresh-SelectionUi -RefreshPreview $false
-        }
-    })
-
-    $textEnd.Add_Leave({
-        if ($uiState.UpdatingText) { return }
-        try {
-            Apply-BoundaryFromText -Target 'end'
-        }
-        catch {
-            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'FFActions - Error', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-            Refresh-SelectionUi -RefreshPreview $false
-        }
-    })
-
-    $textStart.Add_KeyDown({
-        param($sender, $e)
-        if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
-            try {
-                Apply-BoundaryFromText -Target 'start'
-            }
-            catch {
-                [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'FFActions - Error', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-                Refresh-SelectionUi -RefreshPreview $false
-            }
-            $e.SuppressKeyPress = $true
-        }
-    })
-
-    $textEnd.Add_KeyDown({
-        param($sender, $e)
-        if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
-            try {
-                Apply-BoundaryFromText -Target 'end'
-            }
-            catch {
-                [System.Windows.Forms.MessageBox]::Show($_.Exception.Message, 'FFActions - Error', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
-                Refresh-SelectionUi -RefreshPreview $false
-            }
-            $e.SuppressKeyPress = $true
+    # Invalid characters are replaced as they are typed or pasted; the caret stays in place
+    $textPrefix.Add_TextChanged({
+        $safeText = ConvertTo-SafeFileNamePart -Text $textPrefix.Text
+        if ($safeText -cne $textPrefix.Text) {
+            $caret = $textPrefix.SelectionStart
+            $textPrefix.Text = $safeText
+            $textPrefix.SelectionStart = $caret
         }
     })
 
@@ -1086,6 +1024,7 @@ $form.Text = 'FFActions - Cut video'
     $result = [PSCustomObject]@{
         StartFrame = $selection.StartFrame
         EndFrame   = $selection.EndFrame
+        Prefix     = (ConvertTo-SafeFileNamePart -Text $textPrefix.Text).Trim()
     }
 
     Dispose-PreviewBitmap
@@ -1151,7 +1090,11 @@ $inputBase = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
 $nameStartSeconds = [int][Math]::Floor($startFrame / $fps - 1e-6)
 $nameEndSeconds = [int][Math]::Floor($endTimeSeconds + 1e-6)
 $nameRange = Get-TimeRangeNamePart -StartSeconds $nameStartSeconds -EndSeconds $nameEndSeconds
-$desiredOutput = Join-Path $inputDir ("{0}__CUT__{1}{2}" -f $inputBase, $nameRange, $inputExt)
+$outputBase = "{0}__CUT__{1}" -f $inputBase, $nameRange
+if ($selection.Prefix) {
+    $outputBase = $selection.Prefix + '__' + $outputBase
+}
+$desiredOutput = Join-Path $inputDir ($outputBase + $inputExt)
 $outputFile = Get-UniqueOutputPath -DesiredPath $desiredOutput
 
 $videoFilter = "select='between(n,$startFrameZeroBased,$endFrameZeroBased)',setpts=PTS-STARTPTS"
