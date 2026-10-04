@@ -71,7 +71,8 @@ function Get-VideoInfo {
 function Parse-TimeInput {
     param([Parameter(Mandatory = $true)][string]$Text)
 
-    $value = $Text.Trim()
+    # '-' is accepted as an alternative separator: 00-43 == 00:43
+    $value = $Text.Trim().Replace('-', ':')
     if ([string]::IsNullOrWhiteSpace($value)) {
         throw 'Time value is required.'
     }
@@ -123,7 +124,7 @@ function Parse-TimeInput {
         return ($hours * 3600.0) + ($minutes * 60.0) + $secs
     }
 
-    throw 'Invalid time format. Use 85.5, 01:23.500 or 00:01:23.500.'
+    throw 'Invalid time format. Use 85.5, 01:23.500, 00:01:23.500 or 00-01-23.500.'
 }
 
 function Format-TimeForDisplay {
