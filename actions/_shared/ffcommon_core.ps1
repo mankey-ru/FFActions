@@ -176,6 +176,23 @@ function Get-TimeRangeNamePart {
 }
 }
 
+if (-not (Get-Command -Name 'ConvertTo-SafeFileNamePart' -CommandType Function -ErrorAction SilentlyContinue)) {
+function ConvertTo-SafeFileNamePart {
+    param([string]$Text)
+
+    # Windows set ("<>|:*?\/ and control chars) also covers macOS (:) and Linux (/)
+    $invalid = [System.IO.Path]::GetInvalidFileNameChars()
+    $chars = $Text.ToCharArray()
+    for ($i = 0; $i -lt $chars.Length; $i++) {
+        if ($invalid -contains $chars[$i]) {
+            $chars[$i] = '-'
+        }
+    }
+
+    return (-join $chars)
+}
+}
+
 if (-not (Get-Command -Name 'Remove-PartialOutput' -CommandType Function -ErrorAction SilentlyContinue)) {
 function Remove-PartialOutput {
     param([string]$Path)

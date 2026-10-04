@@ -597,7 +597,7 @@ function Show-CutAudioWindow {
     $form.FormBorderStyle = 'FixedDialog'
     $form.MaximizeBox = $false
     $form.MinimizeBox = $false
-    $form.ClientSize = New-Object System.Drawing.Size(900, 390)
+    $form.ClientSize = New-Object System.Drawing.Size(900, 422)
     $form.TopMost = $true
 
     $labelFile = New-Object System.Windows.Forms.Label
@@ -614,72 +614,84 @@ function Show-CutAudioWindow {
     Enable-ControlDoubleBuffering -Control $wavePanel
     $form.Controls.Add($wavePanel)
 
+    $labelPrefix = New-Object System.Windows.Forms.Label
+    $labelPrefix.Location = New-Object System.Drawing.Point(15, 235)
+    $labelPrefix.Size = New-Object System.Drawing.Size(84, 20)
+    $labelPrefix.Text = 'Filename prefix'
+    $form.Controls.Add($labelPrefix)
+
+    $textPrefix = New-Object System.Windows.Forms.TextBox
+    $textPrefix.Location = New-Object System.Drawing.Point(100, 232)
+    $textPrefix.Size = New-Object System.Drawing.Size(265, 24)
+    $textPrefix.MaxLength = 100
+    $form.Controls.Add($textPrefix)
+
     $labelStart = New-Object System.Windows.Forms.Label
-    $labelStart.Location = New-Object System.Drawing.Point(15, 235)
+    $labelStart.Location = New-Object System.Drawing.Point(15, 267)
     $labelStart.Size = New-Object System.Drawing.Size(50, 20)
     $labelStart.Text = 'Start'
     $form.Controls.Add($labelStart)
 
     $textStart = New-Object System.Windows.Forms.TextBox
-    $textStart.Location = New-Object System.Drawing.Point(65, 232)
+    $textStart.Location = New-Object System.Drawing.Point(65, 264)
     $textStart.Size = New-Object System.Drawing.Size(120, 24)
     $form.Controls.Add($textStart)
 
     $labelEnd = New-Object System.Windows.Forms.Label
-    $labelEnd.Location = New-Object System.Drawing.Point(205, 235)
+    $labelEnd.Location = New-Object System.Drawing.Point(205, 267)
     $labelEnd.Size = New-Object System.Drawing.Size(40, 20)
     $labelEnd.Text = 'End'
     $form.Controls.Add($labelEnd)
 
     $textEnd = New-Object System.Windows.Forms.TextBox
-    $textEnd.Location = New-Object System.Drawing.Point(245, 232)
+    $textEnd.Location = New-Object System.Drawing.Point(245, 264)
     $textEnd.Size = New-Object System.Drawing.Size(120, 24)
     $form.Controls.Add($textEnd)
 
     $labelSelection = New-Object System.Windows.Forms.Label
-    $labelSelection.Location = New-Object System.Drawing.Point(390, 235)
+    $labelSelection.Location = New-Object System.Drawing.Point(390, 267)
     $labelSelection.Size = New-Object System.Drawing.Size(260, 20)
     $labelSelection.Text = ''
     $form.Controls.Add($labelSelection)
 
     $labelTimeline = New-Object System.Windows.Forms.Label
-    $labelTimeline.Location = New-Object System.Drawing.Point(15, 258)
+    $labelTimeline.Location = New-Object System.Drawing.Point(15, 290)
     $labelTimeline.Size = New-Object System.Drawing.Size(860, 20)
     $labelTimeline.Text = ''
     $form.Controls.Add($labelTimeline)
 
     $buttonPlay = New-Object System.Windows.Forms.Button
-    $buttonPlay.Location = New-Object System.Drawing.Point(15, 315)
+    $buttonPlay.Location = New-Object System.Drawing.Point(15, 347)
     $buttonPlay.Size = New-Object System.Drawing.Size(120, 30)
     $buttonPlay.Text = 'Play selection'
     $form.Controls.Add($buttonPlay)
 
     $buttonStop = New-Object System.Windows.Forms.Button
-    $buttonStop.Location = New-Object System.Drawing.Point(145, 315)
+    $buttonStop.Location = New-Object System.Drawing.Point(145, 347)
     $buttonStop.Size = New-Object System.Drawing.Size(80, 30)
     $buttonStop.Text = 'Stop'
     $form.Controls.Add($buttonStop)
 
     $buttonRemove = New-Object System.Windows.Forms.Button
-    $buttonRemove.Location = New-Object System.Drawing.Point(235, 315)
+    $buttonRemove.Location = New-Object System.Drawing.Point(235, 347)
     $buttonRemove.Size = New-Object System.Drawing.Size(135, 30)
     $buttonRemove.Text = 'Remove selection'
     $form.Controls.Add($buttonRemove)
 
     $buttonSilence = New-Object System.Windows.Forms.Button
-    $buttonSilence.Location = New-Object System.Drawing.Point(380, 315)
+    $buttonSilence.Location = New-Object System.Drawing.Point(380, 347)
     $buttonSilence.Size = New-Object System.Drawing.Size(135, 30)
     $buttonSilence.Text = 'Silence selection'
     $form.Controls.Add($buttonSilence)
 
     $buttonCut = New-Object System.Windows.Forms.Button
-    $buttonCut.Location = New-Object System.Drawing.Point(665, 315)
+    $buttonCut.Location = New-Object System.Drawing.Point(665, 347)
     $buttonCut.Size = New-Object System.Drawing.Size(100, 30)
     $buttonCut.Text = 'Cut'
     $form.Controls.Add($buttonCut)
 
     $buttonCancel = New-Object System.Windows.Forms.Button
-    $buttonCancel.Location = New-Object System.Drawing.Point(775, 315)
+    $buttonCancel.Location = New-Object System.Drawing.Point(775, 347)
     $buttonCancel.Size = New-Object System.Drawing.Size(100, 30)
     $buttonCancel.Text = 'Cancel'
     $form.Controls.Add($buttonCancel)
@@ -1070,6 +1082,7 @@ function Show-CutAudioWindow {
                 Duration      = $duration
                 RemoveCount   = $state.RemoveCount
                 RemovedTotal  = $state.TotalRemovedSeconds
+                Prefix        = (ConvertTo-SafeFileNamePart -Text $textPrefix.Text).Trim()
             }
             $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
             $form.Close()
@@ -1086,6 +1099,16 @@ function Show-CutAudioWindow {
 
     $textStart.Add_Leave({ & $applyBoundaryFromText 'start' })
     $textEnd.Add_Leave({ & $applyBoundaryFromText 'end' })
+
+    # Invalid characters are replaced as they are typed or pasted; the caret stays in place
+    $textPrefix.Add_TextChanged({
+        $safeText = ConvertTo-SafeFileNamePart -Text $textPrefix.Text
+        if ($safeText -cne $textPrefix.Text) {
+            $caret = $textPrefix.SelectionStart
+            $textPrefix.Text = $safeText
+            $textPrefix.SelectionStart = $caret
+        }
+    })
 
     $form.Add_FormClosing({
         param($sender, $e)
@@ -1160,7 +1183,11 @@ try {
             $nameEndSeconds = [int][Math]::Floor($selection.EndSeconds + 1e-6)
             $nameSuffix += '__' + (Get-TimeRangeNamePart -StartSeconds $nameStartSeconds -EndSeconds $nameEndSeconds)
         }
-        $desiredOutput = Join-Path $inputDir ($baseName + $nameSuffix + $extension)
+        $outputBase = $baseName + $nameSuffix
+        if ($selection.Prefix) {
+            $outputBase = $selection.Prefix + '__' + $outputBase
+        }
+        $desiredOutput = Join-Path $inputDir ($outputBase + $extension)
         $outputFile = Get-UniqueOutputPath -DesiredPath $desiredOutput
 
         $ffmpegArgs = Get-FinalAudioArguments -InputFile $selection.WorkingFile -OutputFile $outputFile -StartSeconds $selection.StartSeconds -DurationSeconds $selection.Duration -Extension $extension
