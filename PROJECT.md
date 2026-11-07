@@ -3,11 +3,12 @@
 > **Origin:** based on the original `AGENTS.md` from the upstream project
 > https://github.com/Gaurox/FFActions (snapshot as of fork commit `fc9f682`,
 > "Release 1.3.0"). This repo is a fork of it; the root `AGENTS.md` was replaced
-> with personal working rules and links here.
+> with my agent rules (root `AGENTS.md`, `AGENTS_INCLUDES/`, shared `~/.claude`),
+> which link here.
 >
 > - Rules are kept as in upstream; only formatting was cleaned up and the
 >   Architecture / Shared Helpers lists were synced with the current repo layout.
-> - On conflict, root `AGENTS.md` wins over this file.
+> - On conflict, my agent rules win over this file.
 > - When syncing with upstream, check whether upstream `AGENTS.md` changed and
 >   port the changes here.
 
