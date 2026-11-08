@@ -1,14 +1,41 @@
+# Reference: ~/.claude/.editorconfig (my-global-agent-rules).
 root = true
 
 [*]
 charset = utf-8
+end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
+indent_style = tab
+indent_size = 4
+quote_type = single
+curly_bracket_next_line = false
+# Prettier takes printWidth from here (its default, 80, breaks long inline arrow functions)
+max_line_length = 120
+
+[{*.json,*.yml,*.yaml,.prettierrc}]
+indent_style = space
+indent_size = 2
 
 [*.md]
-end_of_line = lf
+indent_style = space
 
-[*.{ps1,bat,iss}]
+[*.svg]
+insert_final_newline = false
+
+# Windows scripts: CRLF (cmd.exe misreads LF batch files), 4 spaces
+[*.{ps1,psd1,psm1,bat,iss}]
 end_of_line = crlf
 indent_style = space
 indent_size = 4
+
+# Windows PowerShell 5.1 reads files without a BOM as ANSI; no BOM in .bat
+[*.{ps1,psd1,psm1}]
+charset = utf-8-bom
+
+# ---- Project additions below; keep everything above verbatim ----
+
+# actions/image_to_pdf.exe.config (XML from upstream): 2 spaces
+[*.config]
+indent_style = space
+indent_size = 2
